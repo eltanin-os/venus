@@ -1,0 +1,33 @@
+.Dd September 23, 2019
+.Dt VENUS-AR 5
+.Os
+.Sh NAME
+.Nm venus-ar
+.Nd archive format
+.Sh DESCRIPTION
+The
+.Nm
+archive format join several files, of any type, into one.
+
+A
+.Nm
+archive consists of a ASCII file identifier
+.Sq 3C47B1F3 ,
+and files, each one with its own header.
+
+The headers for a
+.Nm
+archive consists of the following:
+.Bd -literal -offset indent
+struct header {
+	char mode[8];
+	char uid[8];
+	char gid[8];
+	char namesize[8];
+	char size[24];
+};
+.Ed
+All unused bytes in the header are filled with null characters
+.Pq Sq \0 .
+.Sh SEE ALSO
+.Xr venus-ar 1

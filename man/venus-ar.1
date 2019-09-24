@@ -1,0 +1,48 @@
+.Dd September 23, 2019
+.Dt VENUS-AR 1
+.Os
+.Sh NAME
+.Nm venus-ar
+.Nd archiver
+.Sh SYNOPSIS
+.Nm
+.Fl c Op Fl f Ar file
+.Op Ar
+.Nm
+.Fl x Op Fl f Ar file
+.Sh DESCRIPTION
+The
+.Nm
+utility creates or extract files from an archive file in
+.Xr venus-ar 5
+format.
+
+In the first form,
+.Nm
+will create an archive with the given
+.Ar files ,
+and write the result to the standard output.
+
+In the second form,
+.Nm
+will read the archive from the standard input,
+and write its content under the working directory.
+.Sh OPTIONS
+.Bl -tag -width Ds
+.It Fl c
+Set operation to archive.
+.It Fl f Ar file
+Set
+.Ar file
+as input/output file.
+.It Fl x
+Set operation to unarchive.
+.El
+.Sh EXIT STATUS
+.Ex -std
+.Sh EXAMPLES
+.Sh SEE ALSO
+.Xr venus-ar 5
+.Sh CAVEATS
+Using absolute path names will create files outside of the working directory
+during the unarchive process.

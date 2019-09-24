@@ -1,0 +1,35 @@
+.Dd September 23, 2019
+.Dt VENUS-CONF 5
+.Os
+.Sh NAME
+.Nm venus-conf
+.Nd venus configuration file
+.Sh DESCRIPTION
+The
+.Nm
+file contains configuration for
+.Xr venus 1
+as a list of variable-value pairs. Each line has the format
+.Ql variable=value.
+
+The following variables are supported:
+.Bl -tag -width uncompress
+.It arch
+Set the architecture of the system.
+.It extension
+Set the extension used by the compressor.
+.It fetch
+Set the tool used to fetch the packages.
+.It fflags
+Set the flags passed to the fetch tool.
+.It root
+Set the location where the packages are going to be installed.
+.It uflags
+Set the flags passed to the uncompressor tool.
+.It uncompress
+Set the tool used to uncompress the packages.
+.It url
+Set the repository url.
+.El
+.Sh SEE ALSO
+.Xr venus 1

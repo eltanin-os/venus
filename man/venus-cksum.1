@@ -1,0 +1,24 @@
+.Dd September 23, 2019
+.Dt VENUS-CKSUM 1
+.Os
+.Sh NAME
+.Nm venus-cksum
+.Nd write file checksums and sizes
+.Sh SYNOPSIS
+.Nm
+.Op Ar
+.Sh DESCRIPTION
+The
+.Nm
+utility writes to the standard output a single line for each
+.Ar file ,
+consiting of the path, the fletcher checksum and the number of octets.
+If
+.Ar file
+is a single dash
+.Pq Sq -
+or absent,
+.Nm
+reads from the standard input.
+.Sh EXIT STATUS
+.Ex -std
