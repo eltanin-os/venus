@@ -148,7 +148,12 @@ unarchivefd(int afd)
 				c_err_die(1, "c_sys_allrw");
 			n -= len;
 		}
+		(void)c_sys_close(fd);
 	}
+
+	c_dyn_free(&arr);
+	(void)c_sys_close(fp->fd);
+	c_std_free(fp);
 
 	return 0;
 }

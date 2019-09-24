@@ -84,6 +84,9 @@ conf_start(void)
 		else if (!STRCMP("url", c_arr_data(ap)))
 			assign(&url, s);
 	}
+
+	c_sys_close(fp->fd);
+	c_std_free(fp);
 }
 
 /* pkg db routines */
@@ -346,6 +349,7 @@ pkgexplode(struct package *p)
 	c_sys_close(fds[1]);
 	unarchivefd(fds[0]);
 	c_sys_close(fds[0]);
+	c_sys_close(fd);
 
 	return 0;
 }
@@ -590,10 +594,13 @@ main(int argc, char **argv)
 		(void)pkgdata(&pkg);
 		rv |= fn(&pkg);
 		pkgfree(&pkg);
+		c_sys_close(pkg.fp->fd);
+		c_std_free(pkg.fp);
 		if (c_sys_fchdir(rfd) < 0)
 			c_err_die(1, "c_sys_fchdir");
 	}
 
+	c_sys_close(rfd);
 	c_ioq_flush(ioq1);
 
 	return 0;
