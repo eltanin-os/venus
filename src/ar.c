@@ -12,8 +12,6 @@
 
 struct header {
 	char mode[8];
-	char uid[8];
-	char gid[8];
 	char namesize[8];
 	char size[24];
 };
@@ -71,8 +69,6 @@ archivefd(int afd, char **av)
 			c_err_die(1, "c_sys_open %s", p->path);
 
 		putoctal(fp, 8, p->stp->mode);
-		putoctal(fp, 8, p->stp->uid);
-		putoctal(fp, 8, p->stp->gid);
 		putoctal(fp, 8, p->len);
 		putoctal(fp, 24, p->stp->size);
 		c_ioq_nput(fp, p->path, p->len);
@@ -104,7 +100,7 @@ unarchivefd(int afd)
 	ctype_arr arr;
 	size len, n;
 	int fd;
-	char hb[56];
+	char hb[40];
 	char *s;
 
 	if (!(fp = ioqfd_new(afd, c_sys_read)))
@@ -148,6 +144,11 @@ unarchivefd(int afd)
 				c_err_die(1, "c_sys_allrw");
 			n -= len;
 		}
+		s = sdup(p->mode, sizeof(p->mode));
+		n = c_std_strtovl(s, 8, 0, C_UVLONGMAX, nil, nil);
+		if (c_sys_fchmod(fd, n) < 0)
+			c_err_die(1, "c_sys_fchmod");
+
 		(void)c_sys_close(fd);
 	}
 
