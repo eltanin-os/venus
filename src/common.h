@@ -16,5 +16,6 @@ char *concat(char *, char *);
 char *sdup(char *, uint);
 char **avmake2(char *, char *);
 char **avmake3(char *, char *, char *);
+int check_sum(ctype_hst *, char *);
 int makepath(char *);
 int destroypath(char *, usize);

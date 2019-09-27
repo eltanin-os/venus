@@ -10,7 +10,7 @@
 #define SUMFILE "/etc/chksum"
 #define LOCALCONF ".config/venus.conf"
 
-#define DBFILE "remote.db"
+#define DBFILE "remote.vlz"
 #define SMFILE "chksum"
 
 enum {
@@ -357,7 +357,12 @@ pkgexplode(struct package *p)
 static int
 pkgfetch(struct package *p)
 {
-	ctype_arr arr;
+	ctype_arr *ap, arr;
+	ctype_hst hs;
+	ctype_ioq *fp;
+	usize n;
+	int check;
+	char *sum, *siz;
 
 	(void)c_mem_set(&arr, sizeof(arr), 0);
 	if (c_dyn_fmt(&arr, "%s/%s/%s#%s.v%s",
@@ -372,6 +377,51 @@ pkgfetch(struct package *p)
 		c_exc_run(fetch, avmake3(fetch, fflags, c_arr_data(&arr)));
 		c_err_die(1, "c_exc_run %s", fetch);
 	}
+	(void)c_sys_wait(nil);
+
+	c_arr_trunc(&arr, 0, sizeof(uchar));
+	if (c_dyn_fmt(&arr, "%s/%s#%s.v%s",
+	    CACHEDIR, p->name, p->version, ext) < 0)
+		c_err_die(1, "c_dyn_fmt");
+
+	if (c_hsh_putfile(&hs, c_hsh_whirlpool, c_arr_data(&arr)) < 0)
+		c_err_die(1, "c_hsh_putfile %s", c_arr_data(&arr));
+
+	c_arr_trunc(&arr, 0, sizeof(uchar));
+	(void)c_arr_fmt(&arr, "%s#%s.v%s", p->name, p->version, ext);
+
+	if (!(fp = ioq_new(SUMFILE, C_OREAD, 0)))
+		c_err_die(1, "ioq_new %s", SUMFILE);
+
+	check = 0;
+
+	while ((ap = getln(fp))) {
+		sum = c_arr_data(ap);
+		sum[c_arr_bytes(ap) - 1] = 0;
+		if (!(sum = c_str_chr(sum, c_arr_bytes(ap), ' ')))
+			c_err_diex(1, "%s: wrong format", SUMFILE);
+		*sum++ = 0;
+		if (c_str_cmp(c_arr_data(ap), C_USIZEMAX, c_arr_data(&arr)))
+			continue;
+		++check;
+		if (!(siz = c_str_chr(sum, c_arr_bytes(ap), ' ')))
+			c_err_diex(1, "%s: wrong format", SUMFILE);
+		*siz++ = 0;
+		n = c_std_strtovl(siz, 8, 0, C_USIZEMAX, nil, nil);
+		if (n != hs.len)
+			check = c_err_warnx("%s: size mismatch",
+			    c_arr_data(&arr));
+		if (check_sum(&hs, sum) < 0)
+			check = c_err_warnx("%s: checksum mismatch",
+			    c_arr_data(&arr));
+		break;
+	}
+
+	if (!check)
+		check = c_err_warnx("%s: have no checksum", c_arr_data(&arr));
+
+	if (check < 0)
+		(void)c_sys_unlink(c_arr_data(&arr));
 
 	c_dyn_free(&arr);
 
@@ -468,7 +518,66 @@ pkglrdeps(struct package *p)
 static int
 pkgupdate(struct package *p)
 {
+	ctype_arr arr;
+	ctype_fd fds[2];
+	ctype_fd fd;
+
 	(void)p;
+
+	(void)c_mem_set(&arr, sizeof(arr), 0);
+	if (c_dyn_fmt(&arr, "%s/%s", url, DBFILE) < 0)
+		c_err_die(1, "c_dyn_fmt");
+
+	switch (c_sys_fork()) {
+	case -1:
+		c_err_die(1, "c_sys_fork");
+	case 0:
+		(void)c_sys_chdir(CACHEDIR);
+		c_exc_run(fetch, avmake3(fetch, fflags, c_arr_data(&arr)));
+		c_err_die(1, "c_exc_run %s", fetch);
+	}
+
+	c_arr_trunc(&arr, sizeof(arr), 0);
+	if (c_dyn_fmt(&arr, "%s/%s", CACHEDIR, DBFILE) < 0)
+		c_err_die(1, "c_dyn_fmt");
+
+	if ((fd = c_sys_open(c_arr_data(&arr), C_OCREATE | C_OWRITE, 0)) < 0)
+		c_err_die(1, "c_sys_open %s", c_arr_data(&arr));
+
+	if (c_sys_pipe(fds) < 0)
+		c_err_die(1, "c_sys_pipe");
+
+	switch (c_sys_fork()) {
+	case -1:
+		c_err_die(1, "c_sys_fork");
+	case 0:
+		c_sys_dup(fd, 0);
+		c_sys_dup(fds[1], 1);
+		c_sys_close(fds[0]);
+		c_sys_close(fds[1]);
+
+		c_exc_run(uncompress, avmake2(uncompress, uflags));
+		c_err_die(1, "c_exc_run %s", uncompress);
+	}
+
+	c_sys_close(fds[1]);
+	unarchivefd(fds[0]);
+	c_sys_close(fds[0]);
+	c_sys_close(fd);
+
+	c_arr_trunc(&arr, sizeof(arr), 0);
+	if (c_dyn_fmt(&arr, "%s/%s", url, SMFILE) < 0)
+		c_err_die(1, "c_dyn_fmt");
+
+	switch (c_sys_fork()) {
+	case -1:
+		c_err_die(1, "c_sys_fork");
+	case 0:
+		(void)c_sys_chdir(CACHEDIR);
+		c_exc_run(fetch, avmake3(fetch, fflags, c_arr_data(&arr)));
+		c_err_die(1, "c_exc_run %s", fetch);
+	}
+
 	return 0;
 }
 
@@ -544,10 +653,6 @@ main(int argc, char **argv)
 	default:
 		usage();
 	} C_ARGEND
-
-
-	if (!argc)
-		usage();
 
 	if ((tmp = c_sys_getenv("VENUS_ARCH")))
 		arch = tmp;

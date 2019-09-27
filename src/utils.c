@@ -3,6 +3,8 @@
 
 #include "common.h"
 
+#define HDEC(x) ((x <= '9') ? x - '0' : (((uchar)x | 32) - 'a') + 10)
+
 ctype_ioq *
 ioqfd_new(ctype_fd fd, ctype_iofn fn)
 {
@@ -101,11 +103,28 @@ char **
 avmake3(char *s1, char *s2, char *s3)
 {
 	static char *av[4];
+
 	av[0] = s1;
 	av[1] = s2;
 	av[2] = s3;
 	av[3] = nil;
 	return av;
+}
+
+int
+check_sum(ctype_hst *h, char *s)
+{
+	int i;
+	char buf[64];
+
+	c_hsh_digest(h, c_hsh_whirlpool, buf);
+	for (i = 0; i < 64; ++i) {
+		if (((HDEC(s[0]) << 4) | HDEC(s[1])) != (uchar)buf[i])
+			return -1;
+		s += 2;
+	}
+
+	return 0;
 }
 
 /* dir routines */

@@ -52,6 +52,9 @@ archivefd(int afd, char **av)
 
 	(void)c_ioq_put(fp, MAGIC);
 
+	if (!av || !*av)
+		return 0;
+
 	if (c_dir_open(&dir, av, 0, nil) < 0)
 		c_err_die(1, "c_dir_open");
 
