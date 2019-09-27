@@ -1,4 +1,4 @@
-.Dd September 23, 2019
+.Dd September 24, 2019
 .Dt VENUS-CKSUM 1
 .Os
 .Sh NAME
@@ -6,6 +6,7 @@
 .Nd write file checksums and sizes
 .Sh SYNOPSIS
 .Nm
+.Op Fl w
 .Op Ar
 .Sh DESCRIPTION
 The
@@ -20,5 +21,10 @@ is a single dash
 or absent,
 .Nm
 reads from the standard input.
+.Sh OPTIONS
+.Bl -tag -width Ds
+.It Fl w
+Set whirlpool as sum algorithm.
+.El
 .Sh EXIT STATUS
 .Ex -std
