@@ -51,11 +51,10 @@ main(int argc, char **argv)
 	if (!file)
 		file = f;
 
-	if (op == ARCHIVE) {
+	if (op == ARCHIVE)
 		archive(file, argv);
-	} else if (op == UNARCHIVE) {
+	else if (op == UNARCHIVE)
 		unarchive(file);
-	}
 
 	return 0;
 }
