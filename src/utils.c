@@ -32,12 +32,6 @@ ioq_new(char *file, uint opts, uint mode)
 {
 	ctype_fd fd;
 
-	if (!STRCMP("<stdin>", file))
-		return ioq0;
-
-	if (!STRCMP("<stdout>", file))
-		return ioq1;
-
 	if ((fd = c_sys_open(file, opts, mode)) < 0)
 		return nil;
 

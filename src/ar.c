@@ -33,6 +33,9 @@ archive(char *file, char **av)
 {
 	int fd;
 
+	if (!STRCMP("<stdout>", file))
+		return archivefd(C_FD1, av);
+
 	if ((fd = c_sys_open(file, WOPTS, WMODE)) < 0)
 		c_err_die(1, "c_sys_open %s", file);
 
@@ -98,6 +101,9 @@ int
 unarchive(char *file)
 {
 	int fd;
+
+	if (!STRCMP("<stdin>", file))
+		return unarchivefd(C_FD0);
 
 	if ((fd = c_sys_open(file, ROPTS, RMODE)) < 0)
 		c_err_die(1, "c_sys_open %s", file);
