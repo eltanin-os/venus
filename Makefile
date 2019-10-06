@@ -47,8 +47,18 @@ $(OBJ): $(HDR) config.mk
 	$(CC) $(CFLAGS) $(CPPFLAGS) $(INC) -o $@ -c $<
 
 # USER ACTIONS
+install-man: all
+	install -dm 755 $(DESTDIR)/$(MANDIR)/man1
+	install -dm 755 $(DESTDIR)/$(MANDIR)/man5
+	install -cm 644 $(MAN1) $(DESTDIR)/$(MANDIR)/man1
+	install -cm 644 $(MAN5) $(DESTDIR)/$(MANDIR)/man5
+
+install: all install-man
+	install -dm 755 $(DESTDIR)/$(PREFIX)/bin
+	install -cm 755 $(BIN) $(DESTDIR)/$(PREFIX)/bin
+
 clean:
 	rm -f $(BIN) $(OBJ) $(LIB)
 
 .PHONY:
-	all install clean
+	all install install-man clean
