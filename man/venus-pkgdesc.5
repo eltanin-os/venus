@@ -32,8 +32,6 @@ A one-line description of the package.
 .It size
 The size of the package when installed, in bytes
 .Pq octal .
-.It reason
-The reason that triggered the installation of this package.
 .El
 
 The multiple value variables are:
@@ -58,12 +56,14 @@ name#version- (the specified version or lower)
 .Ed
 
 The files values must be declared as
-.Dl	name	checksum	size
+.Dl	name checksum size
 The name field must be a relative path, the checksum and size fields must
 be in octal format, and the size must be given in bytes.
 
-The fields of multiple value variables must be declared one per line, and
-must start and be separated by a tabulation character
-.Pq Sq \t .
+The fields of multiple value variables must be declared one per line,
+started by a tabulation character
+.Pq Sq \et ,
+and separated by a single blank character
+.Pq Sq \ \& .
 .Sh SEE ALSO
 .Xr venus 1

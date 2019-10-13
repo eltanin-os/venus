@@ -28,7 +28,6 @@ struct package {
 	char *license;
 	char *description;
 	char *size;
-	char *reason;
 };
 
 static int rfd;
@@ -122,8 +121,6 @@ pkgdata(struct package *p)
 			assign(&p->description, v);
 		else if (!STRCMP("size", s))
 			assign(&p->size, v);
-		else if (!STRCMP("reason", s))
-			assign(&p->reason, v);
 
 		s = c_ioq_peek(p->fp);
 		if (*s != '#')
@@ -216,7 +213,6 @@ pkgfree(struct package *p)
 	c_std_free(p->license);
 	c_std_free(p->description);
 	c_std_free(p->size);
-	c_std_free(p->reason);
 }
 
 /* pkg routines */
@@ -241,9 +237,9 @@ pkgadd(struct package *p)
 
 	rv = 0;
 	while ((pkg = pkgfiles(p))) {
-		if ((ssum = c_str_chr(pkg, C_USIZEMAX, '\t')))
+		if ((ssum = c_str_chr(pkg, C_USIZEMAX, ' ')))
 			*ssum++ = 0;
-		if ((ssiz = c_str_chr(ssum, C_USIZEMAX, '\t')))
+		if ((ssiz = c_str_chr(ssum, C_USIZEMAX, ' ')))
 			*ssiz++ = 0;
 		if (c_dyn_fmt(&arr, "%s", pkg) < 0)
 			c_err_die(1, "c_dyn_fmt");
@@ -293,7 +289,7 @@ pkgdel(struct package *p)
 	char *pkg, *s;
 
 	while ((pkg = pkgfiles(p))) {
-		if ((s = c_str_chr(pkg, C_USIZEMAX, '\t')))
+		if ((s = c_str_chr(pkg, C_USIZEMAX, ' ')))
 			*s++ = 0;
 		s = concat(root, pkg);
 		if (c_sys_unlink(s) < 0) {
@@ -436,10 +432,9 @@ pkginfo(struct package *p)
 	    "Version: %s\n"
 	    "License: %s\n"
 	    "Description: %s\n"
-	    "Size: %s\n"
-	    "Reason: %s\n",
+	    "Size: %s\n",
 	    p->name, p->version, p->license,
-	    p->description, p->size, p->reason);
+	    p->description, p->size);
 	return 0;
 }
 
