@@ -487,6 +487,12 @@ pkglmdeps(struct package *p)
 }
 
 static int
+pkgradd(struct package *p)
+{
+	return pkgfetch(p) || pkgexplode(p) || pkgadd(p);
+}
+
+static int
 pkglrdeps(struct package *p)
 {
 	char *pkg, *s;
@@ -581,7 +587,7 @@ static void
 usage(void)
 {
 	c_ioq_fmt(ioq2,
-	    "usage: %s [-NLR] -adefi [pkg ...]\n"
+	    "usage: %s [-NLR] -Aadefi [pkg ...]\n"
 	    "       %s [-NLR] -l files|mdeps|rdeps [pkg ...]\n"
 	    "       %s -u\n",
 	    c_std_getprogname(), c_std_getprogname(), c_std_getprogname());
@@ -599,8 +605,13 @@ main(int argc, char **argv)
 
 	c_std_setprogname(argv[0]);
 	tdb = nil;
+	fn = nil;
 
 	C_ARGBEGIN {
+	case 'A':
+		db = REMOTEDB;
+		fn = pkgradd;
+		break;
 	case 'N':
 		tdb = "";
 		break;
@@ -676,6 +687,8 @@ main(int argc, char **argv)
 	(void)c_sys_umask(0);
 	conf_start();
 
+	if (!fn)
+		usage();
 	if (fn == pkgupdate)
 		c_std_exit(fn(nil));
 
