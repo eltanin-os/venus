@@ -17,8 +17,10 @@ main(int argc, char **argv)
 {
 	ctype_hmd *hfn;
 	ctype_hst hs;
+	ctype_stat st;
 	int i, rv;
-	char buf[64];
+	size r;
+	char buf[C_PATHMAX];
 
 	c_std_setprogname(argv[0]);
 	hfn = c_hsh_fletcher32;
@@ -37,11 +39,19 @@ main(int argc, char **argv)
 	rv = 0;
 
 	for (; *argv; --argc, ++argv) {
-		if (C_ISDASH(*argv))
-			*argv = "<stdin>";
-		if (c_hsh_putfile(&hs, hfn, *argv) < 0) {
-			rv = c_err_warn("c_hsh_putfile %s", *argv);
-			continue;
+		if (!c_sys_lstat(&st, *argv) && C_ISLNK(st.mode)) {
+			if ((r = c_sys_readlink(buf, sizeof(buf), *argv)) < 0) {
+				rv = c_err_warn("c_sys_readlink %s", *argv);
+				continue;
+			}
+			c_hsh_all(&hs, hfn, buf, r);
+		} else {
+			if (C_ISDASH(*argv))
+				*argv = "<stdin>";
+			if (c_hsh_putfile(&hs, hfn, *argv) < 0) {
+				rv = c_err_warn("c_hsh_putfile %s", *argv);
+				continue;
+			}
 		}
 		if (hfn == c_hsh_whirlpool) {
 			c_hsh_digest(&hs, hfn, buf);
