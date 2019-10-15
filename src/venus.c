@@ -524,7 +524,6 @@ pkgupdate(struct package *p)
 	ctype_fd fd;
 
 	(void)p;
-
 	(void)c_mem_set(&arr, sizeof(arr), 0);
 	if (c_dyn_fmt(&arr, "%s/%s", url, DBFILE) < 0)
 		c_err_die(1, "c_dyn_fmt");
@@ -537,6 +536,7 @@ pkgupdate(struct package *p)
 		c_exc_run(fetch, avmake3(fetch, fflags, c_arr_data(&arr)));
 		c_err_die(1, "c_exc_run %s", fetch);
 	}
+	(void)c_sys_wait(nil);
 
 	c_arr_trunc(&arr, sizeof(arr), 0);
 	if (c_dyn_fmt(&arr, "%s/%s", CACHEDIR, DBFILE) < 0)
