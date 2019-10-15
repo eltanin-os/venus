@@ -562,7 +562,9 @@ pkgupdate(struct package *p)
 	}
 
 	c_sys_close(fds[1]);
+	c_sys_chdir(REMOTEDB);
 	unarchivefd(fds[0]);
+	c_sys_fchdir(rfd);
 	c_sys_close(fds[0]);
 	c_sys_close(fd);
 
