@@ -1,4 +1,4 @@
-#define STRCMP(a, b) c_mem_cmp((a), sizeof((a)), (b))
+#define STRCMP(a, b) c_mem_cmp((a), sizeof((a)) - 1, (b))
 #define IOQSIZ (sizeof(ctype_arr) + sizeof(ctype_ioq))
 
 /* archive routines */

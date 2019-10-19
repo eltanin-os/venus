@@ -75,7 +75,7 @@ conf_start(void)
 		else if (!STRCMP("fflags", c_arr_data(ap)))
 			assign(&fflags, s);
 		else if (!STRCMP("root", c_arr_data(ap)))
-			assign(&url, s);
+			assign(&root, s);
 		else if (!STRCMP("uflags", c_arr_data(ap)))
 			assign(&uflags, s);
 		else if (!STRCMP("uncompress", c_arr_data(ap)))
@@ -542,7 +542,7 @@ pkgupdate(struct package *p)
 	if (c_dyn_fmt(&arr, "%s/%s", CACHEDIR, DBFILE) < 0)
 		c_err_die(1, "c_dyn_fmt");
 
-	if ((fd = c_sys_open(c_arr_data(&arr), C_OCREATE | C_OWRITE, 0)) < 0)
+	if ((fd = c_sys_open(c_arr_data(&arr), C_OREAD, 0)) < 0)
 		c_err_die(1, "c_sys_open %s", c_arr_data(&arr));
 
 	if (c_sys_pipe(fds) < 0)

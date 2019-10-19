@@ -127,8 +127,8 @@ unarchivefd(int afd)
 		c_err_die(1, "ioqfd_new");
 
 	(void)c_ioq_get(fp, hb, sizeof(MAGIC) - 1);
-	if (!STRCMP(MAGIC, hb))
-		c_err_diex(1, "unkown format");
+	if (STRCMP(MAGIC, hb))
+		c_err_diex(1, "%s %s: unkown format", MAGIC, hb);
 
 	(void)c_mem_set(&arr, sizeof(arr), 0);
 	p = (void *)hb;
