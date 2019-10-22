@@ -569,17 +569,18 @@ pkgupdate(struct package *p)
 	c_sys_close(fd);
 
 	c_arr_trunc(&arr, sizeof(arr), 0);
-	if (c_dyn_fmt(&arr, "%s/%s", url, SMFILE) < 0)
+	if (c_dyn_fmt(&arr, "%s/%s/%s", url, arch, SMFILE) < 0)
 		c_err_die(1, "c_dyn_fmt");
 
 	switch (c_sys_fork()) {
 	case -1:
 		c_err_die(1, "c_sys_fork");
 	case 0:
-		(void)c_sys_chdir(CACHEDIR);
 		c_exc_run(fetch, avmake3(fetch, fflags, c_arr_data(&arr)));
 		c_err_die(1, "c_exc_run %s", fetch);
 	}
+	c_sys_wait(nil);
+	c_sys_rename(SMFILE, SUMFILE);
 
 	return 0;
 }
