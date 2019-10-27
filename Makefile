@@ -8,13 +8,15 @@ HDR=\
 
 # BIN
 BIN=\
-	src/venus-ar\
-	src/venus-cksum\
 	src/venus
 
 BINSHARED=\
 	src/ar.c\
-	src/utils.c
+	src/main.c\
+	src/utils.c\
+	src/venus-ar.c\
+	src/venus-cksum.c\
+	src/venus.c
 
 # OBJ
 BINSHAREDOBJ= $(BINSHARED:.c=.o)
@@ -36,7 +38,7 @@ OBJ=$(BIN:=.o) $(BINSHAREDOBJ)
 # VAR RULES
 all: $(BIN)
 
-$(BIN): $(BINSHAREDOBJ) $(@:=.o)
+$(BIN): $(BINSHAREDOBJ)
 $(OBJ): $(HDR) config.mk
 
 # SUFFIX RULES
@@ -56,6 +58,8 @@ install-man: all
 install: all install-man
 	install -dm 755 $(DESTDIR)/$(PREFIX)/bin
 	install -cm 755 $(BIN) $(DESTDIR)/$(PREFIX)/bin
+	ln -s venus $(DESTDIR)/$(PREFIX)/bin/venus-ar
+	ln -s venus $(DESTDIR)/$(PREFIX)/bin/venus-cksum
 
 clean:
 	rm -f $(BIN) $(OBJ) $(LIB)

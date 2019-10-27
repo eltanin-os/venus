@@ -10,28 +10,22 @@
 #define WOPTS (C_OCREATE | C_OWRITE)
 #define WMODE C_DEFFILEMODE
 
-struct header {
+struct strheader {
 	char mode[8];
 	char namesize[8];
 	char size[24];
 };
 
-static void
-putoctal(ctype_ioq *fp, uint n, uvlong v)
-{
-	ctype_arr arr;
-	char buf[24];
-
-	(void)c_mem_set(buf, sizeof(buf), 0);
-	c_arr_init(&arr, buf, sizeof(buf));
-	(void)c_arr_fmt(&arr, "%.*uo", n, v);
-	(void)c_ioq_nput(fp, c_arr_data(&arr), n);
-}
+struct header {
+	u32int mode;
+	u32int namesize;
+	u64int size;
+};
 
 int
 archive(char *file, char **av)
 {
-	int fd;
+	ctype_fd fd;
 
 	if (!STRCMP("<stdout>", file))
 		return archivefd(C_FD1, av);
@@ -48,13 +42,12 @@ archivefd(int afd, char **av)
 	ctype_dir dir;
 	ctype_dent *p;
 	ctype_ioq *fp;
-	int fd;
 	char buf[C_PATHMAX];
 
-	if (!(fp = ioqfd_new(afd, c_sys_write)))
+	if (!(fp = new_ioqfd(afd, c_sys_write)))
 		c_err_die(1, "ioqfd_new");
 
-	(void)c_ioq_put(fp, MAGIC);
+	c_ioq_put(fp, MAGIC);
 
 	if (!av || !*av)
 		return 0;
@@ -71,18 +64,13 @@ archivefd(int afd, char **av)
 		case C_FSDEF:
 			continue;
 		}
-		putoctal(fp, 8, p->stp->mode);
-		putoctal(fp, 8, p->len);
-		putoctal(fp, 24, p->stp->size);
-		c_ioq_nput(fp, p->path, p->len);
+		c_ioq_fmt(fp, "%.*uo%.*uo%.*uo%.*s",
+		    8, p->stp->mode, 8, p->len, p->len, p->path);
 
 		switch (p->info) {
 		case C_FSF:
-			if ((fd = c_sys_open(p->path, C_OREAD, 0)) < 0)
-				c_err_die(1, "c_sys_open %s", p->path);
-			if (c_ioq_putfd(fp, fd, p->stp->size) < 0)
-				c_err_diex(1, "c_ioq_putfd %s", *av);
-			c_sys_close(fd);
+			if (c_ioq_putfile(fp, p->path) < 0)
+				c_err_diex(1, "c_ioq_putfile %s", p->path);
 			continue;
 		case C_FSSL:
 		case C_FSSLN:
@@ -92,8 +80,11 @@ archivefd(int afd, char **av)
 		}
 	}
 
-	(void)c_ioq_flush(fp);
+	c_ioq_flush(fp);
 
+	c_dir_close(&dir);
+	c_std_free(fp);
+	c_sys_close(afd);
 	return 0;
 }
 
@@ -114,90 +105,67 @@ unarchive(char *file)
 int
 unarchivefd(int afd)
 {
-	struct header *p;
-	ctype_ioq *fp;
+	struct strheader *p;
+	struct header h;
 	ctype_arr arr;
-	size len, n;
-	int fd;
-	char hb[40];
-	char buf[C_BIOSIZ];
+	ctype_ioq *fp;
+	ctype_fd fd;
+	size r;
 	char *s;
+	char buf[C_BIOSIZ], hbuf[40];
 
-	if (!(fp = ioqfd_new(afd, c_sys_read)))
+	if (!(fp = new_ioqfd(afd, c_sys_read)))
 		c_err_die(1, "ioqfd_new");
 
-	(void)c_ioq_get(fp, hb, sizeof(MAGIC) - 1);
-	if (STRCMP(MAGIC, hb))
-		c_err_diex(1, "%s %s: unkown format", MAGIC, hb);
+	eioqgetall(fp, hbuf, sizeof(MAGIC) - 1);
+	if (STRCMP(MAGIC, hbuf))
+		c_err_diex(1, "unknown format");
 
-	(void)c_mem_set(&arr, sizeof(arr), 0);
-	p = (void *)hb;
+	p = (void *)hbuf;
 	for (;;) {
-		s = hb;
-		n = sizeof(hb);
-		while (n) {
-			len = c_ioq_get(fp, s, n);
-			if (len <= 0) goto done;
-			n -= len;
-			s += len;
-		}
+		if ((r = c_ioq_getall(fp, hbuf, sizeof(*p))) < 0)
+			c_err_die(1, "ioq_getall");
+		if (!r || r != sizeof(*p))
+			break;
+
+		s = sdup(p->mode, sizeof(p->mode));
+		h.mode = estrtovl(s, 8, 0, 07777);
 		s = sdup(p->namesize, sizeof(p->namesize));
-		n = c_std_strtovl(s, 8, 0, C_SIZEMAX, nil, nil);
+		h.namesize = estrtovl(s, 8, 0, C_UINTMAX);
+		s = sdup(p->size, sizeof(p->size));
+		h.size = estrtovl(s, 8, 0, C_UVLONGMAX);
+
 		c_arr_trunc(&arr, 0, sizeof(uchar));
-		if (c_dyn_ready(&arr, n, sizeof(uchar)) < 0)
+		if (c_dyn_ready(&arr, h.namesize, sizeof(uchar)) < 0)
 			c_err_die(1, "c_dyn_ready");
 
 		s = c_arr_data(&arr);
-		s[n] = 0;
-		while (n) {
-			len = c_ioq_get(fp, s, n);
-			if (len <= 0) goto done;
-			n -= len;
-			s += len;
-		}
+		eioqgetall(fp, s, h.namesize);
 
-		s = sdup(p->mode, sizeof(p->mode));
-		n = c_std_strtovl(s, 8, 0, C_SIZEMAX, nil, nil);
-		if (C_ISLNK(n)) {
-			s = sdup(p->size, sizeof(p->size));
-			n = c_std_strtovl(s, 8, 0, C_SIZEMAX, nil, nil);
-			s = buf;
-			s[n] = 0;
-			while (n) {
-				len = c_ioq_get(fp, s, n);
-				if (len <= 0) goto done;
-				n -= len;
-				s += len;
-			}
-			makepath(c_arr_data(&arr));
-			if (c_sys_symlink(buf, c_arr_data(&arr)) < 0)
-				c_err_die(1, "c_sym_link %s %s",
-				    buf, c_arr_data(&arr));
-		} else if (C_ISREG(n)) {
-			s = c_arr_data(&arr);
-			(void)makepath(s);
+		if (C_ISLNK(h.mode)) {
+			eioqgetall(fp, buf, h.size);
+			makepath(s);
+			if (c_sys_symlink(buf, s))
+				c_err_die(1, "c_sys_symlink %s %s", buf, s);
+		} else {
+			makepath(s);
 			if ((fd = c_sys_open(s, WOPTS, WMODE)) < 0)
 				c_err_die(1, "c_sys_open %s", s);
-			s = sdup(p->size, sizeof(p->size));
-			n = c_std_strtovl(s, 8, 0, C_SIZEMAX, nil, nil);
-			while (n) {
-				len = c_ioq_get(fp, buf, C_MIN(C_BIOSIZ, n));
-				if (len <= 0) goto done;
-				if (c_sys_allrw(c_sys_write, fd, buf, len) < 0)
+			while (h.size) {
+				r = C_MIN(sizeof(buf), (usize)r);
+				r = eioqget(fp, buf, r);
+				if (c_sys_allrw(c_sys_write, fd, buf, r) < 0)
 					c_err_die(1, "c_sys_allrw");
-				n -= len;
+				h.size -= r;
 			}
-			s = sdup(p->mode, sizeof(p->mode));
-			n = c_std_strtovl(s, 8, 0, C_SIZEMAX, nil, nil);
-			if (c_sys_fchmod(fd, n) < 0)
+			if (c_sys_fchmod(fd, h.mode) < 0)
 				c_err_die(1, "c_sys_fchmod");
-			(void)c_sys_close(fd);
+			c_sys_close(fd);
 		}
 	}
-done:
-	c_dyn_free(&arr);
-	(void)c_sys_close(fp->fd);
-	c_std_free(fp);
 
+	c_dyn_free(&arr);
+	c_std_free(fp);
+	c_sys_close(afd);
 	return 0;
 }

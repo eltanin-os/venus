@@ -1,5 +1,4 @@
 #define STRCMP(a, b) c_mem_cmp((a), sizeof((a)) - 1, (b))
-#define IOQSIZ (sizeof(ctype_arr) + sizeof(ctype_ioq))
 
 /* archive routines */
 int archive(char *, char **);
@@ -8,14 +7,29 @@ int unarchive(char *);
 int unarchivefd(int);
 
 /* utils routines */
-ctype_ioq *ioqfd_new(ctype_fd, ctype_iofn);
-ctype_ioq *ioq_new(char *, uint, uint);
-ctype_arr *getln(ctype_ioq *);
-void assign(char **, char *);
+char **avmake3(char *, char *, char *);
 char *concat(char *, char *);
 char *sdup(char *, uint);
-char **avmake2(char *, char *);
-char **avmake3(char *, char *, char *);
-int check_sum(ctype_hst *, char *);
-int makepath(char *);
+ctype_arr *getln(ctype_ioq *);
+ctype_ioq *new_ioqfd(ctype_fd, ctype_iofn);
+int checksum_fletcher32(char *, char *, u64int);
+void checksum_whirlpool(ctype_fd fd, char *);
 int destroypath(char *, usize);
+int makepath(char *);
+size eioqget(ctype_ioq *, char *, usize);
+vlong estrtovl(char *, int, vlong, vlong);
+void assign(char **, char *);
+void efchdir(ctype_fd);
+void eioqgetall(ctype_ioq *, char *, usize);
+void dofetch(ctype_fd, char *);
+void uncompress(ctype_fd, ctype_fd);
+
+/* main routines */
+int ar_main(int, char **);
+int cksum_main(int, char **);
+int venus_main(int, char **);
+
+/* global variables */
+extern int fd_root;
+extern char *fetch;
+extern char *inflate;

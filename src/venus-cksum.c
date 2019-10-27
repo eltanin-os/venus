@@ -13,7 +13,7 @@ usage(void)
 }
 
 int
-main(int argc, char **argv)
+cksum_main(int argc, char **argv)
 {
 	ctype_hmd *hfn;
 	ctype_hst hs;

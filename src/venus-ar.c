@@ -20,7 +20,7 @@ usage(void)
 }
 
 int
-main(int argc, char **argv)
+ar_main(int argc, char **argv)
 {
 	int op;
 	char *f, *file;
