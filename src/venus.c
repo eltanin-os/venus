@@ -22,17 +22,17 @@ struct package {
 };
 
 /* dirs */
-static int fd_cache;
-static int fd_etc;
-static int fd_remote;
-static int fd_chksum;
+static ctype_fd fd_cache;
+static ctype_fd fd_etc;
+static ctype_fd fd_remote;
+static ctype_fd fd_chksum;
 
 static char *arch;
 static char *ext;
 static char *root;
 static char *url;
 
-int fd_root;
+ctype_fd fd_root;
 char *fetch;
 char *inflate;
 
@@ -212,7 +212,7 @@ pkgadd(struct package *p)
 		if (c_dyn_fmt(&arr, "%s", pkg) < 0)
 			c_err_die(1, "c_dyn_fmt");
 
-		size = estrtovl(siz, 8, 0, C_UVLONGMAX);
+		size = estrtovl(siz, 8, 0, C_VLONGMAX);
 		if (checksum_fletcher32(c_arr_data(&arr), sum, size) < 0)
 			c_err_die(1, "%s: checksum mismatch", c_arr_data(&arr));
 
@@ -459,13 +459,9 @@ venus_main(int argc, char **argv)
 
 	if (!fn)
 		usage();
-	if (fn == pkgupdate)
-		c_std_exit(fn(nil));
-	if (tdb)
-		db = tdb;
 
-	if ((fd_chksum = c_sys_open(CHKSUMFILE, C_OREAD, 0)) < 0)
-		c_err_die(1, "c_sys_open " CHKSUMFILE);
+	if ((fd_cache = c_sys_open(CACHEDIR, C_OREAD, 0)) < 0)
+		c_err_die(1, "c_sys_open " CACHEDIR);
 
 	if ((fd_etc = c_sys_open(ETCDIR, C_OREAD, 0)) < 0)
 		c_err_die(1, "c_sys_open " ETCDIR);
@@ -475,6 +471,15 @@ venus_main(int argc, char **argv)
 
 	if ((fd_root = c_sys_open(".", C_OREAD, 0)) < 0)
 		c_err_die(1, "c_sys_open <dot>");
+
+	if (fn == pkgupdate)
+		c_std_exit(fn(nil));
+
+	if ((fd_chksum = c_sys_open(CHKSUMFILE, C_OREAD, 0)) < 0)
+		c_err_die(1, "c_sys_open " CHKSUMFILE);
+
+	if (tdb)
+		db = tdb;
 
 	c_mem_set(&pkg, sizeof(pkg), 0);
 	pkg.fp = &ioq;

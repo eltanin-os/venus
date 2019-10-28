@@ -10,11 +10,11 @@ main(int argc, char **argv)
 
 	argv0 = c_gen_basename(sdup(*argv, c_str_len(*argv, C_USIZEMAX)));
 
-	if (!STRCMP("venus", argv0))
+	if (!c_str_cmp(argv0, C_USIZEMAX, "venus"))
 		return venus_main(argc, argv);
-	else if (!STRCMP("venus-ar", argv0))
+	else if (!c_str_cmp(argv0, C_USIZEMAX, "venus-ar"))
 		return ar_main(argc, argv);
-	else if (!STRCMP("venus-cksum", argv0))
+	else if (!c_str_cmp(argv0, C_USIZEMAX, "venus-cksum"))
 		return cksum_main(argc, argv);
 
 	return 1;

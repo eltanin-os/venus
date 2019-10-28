@@ -36,6 +36,16 @@ archive(char *file, char **av)
 	return archivefd(fd, av);
 }
 
+static void
+putoctal(ctype_ioq *p, uvlong v, int n)
+{
+	char buf[24];
+
+	c_mem_set(buf, sizeof(buf), 0);
+	n -= c_ioq_fmt(p, "%.*uo", n, v);
+	c_ioq_nput(p, buf, n);
+}
+
 int
 archivefd(int afd, char **av)
 {
@@ -64,8 +74,10 @@ archivefd(int afd, char **av)
 		case C_FSDEF:
 			continue;
 		}
-		c_ioq_fmt(fp, "%.*uo%.*uo%.*uo%.*s",
-		    8, p->stp->mode, 8, p->len, p->len, p->path);
+		putoctal(fp, p->stp->mode, 8);
+		putoctal(fp, p->len, 8);
+		putoctal(fp, p->stp->size, 24);
+		c_ioq_nput(fp, p->path, p->len);
 
 		switch (p->info) {
 		case C_FSF:
@@ -121,6 +133,7 @@ unarchivefd(int afd)
 	if (STRCMP(MAGIC, hbuf))
 		c_err_diex(1, "unknown format");
 
+	c_mem_set(&arr, sizeof(arr), 0);
 	p = (void *)hbuf;
 	for (;;) {
 		if ((r = c_ioq_getall(fp, hbuf, sizeof(*p))) < 0)
@@ -129,11 +142,11 @@ unarchivefd(int afd)
 			break;
 
 		s = sdup(p->mode, sizeof(p->mode));
-		h.mode = estrtovl(s, 8, 0, 07777);
+		h.mode = estrtovl(s, 8, 0, 0777777);
 		s = sdup(p->namesize, sizeof(p->namesize));
 		h.namesize = estrtovl(s, 8, 0, C_UINTMAX);
 		s = sdup(p->size, sizeof(p->size));
-		h.size = estrtovl(s, 8, 0, C_UVLONGMAX);
+		h.size = estrtovl(s, 8, 0, C_VLONGMAX);
 
 		c_arr_trunc(&arr, 0, sizeof(uchar));
 		if (c_dyn_ready(&arr, h.namesize, sizeof(uchar)) < 0)
@@ -152,8 +165,7 @@ unarchivefd(int afd)
 			if ((fd = c_sys_open(s, WOPTS, WMODE)) < 0)
 				c_err_die(1, "c_sys_open %s", s);
 			while (h.size) {
-				r = C_MIN(sizeof(buf), (usize)r);
-				r = eioqget(fp, buf, r);
+				r = eioqget(fp, buf, C_MIN(C_BIOSIZ, h.size));
 				if (c_sys_allrw(c_sys_write, fd, buf, r) < 0)
 					c_err_die(1, "c_sys_allrw");
 				h.size -= r;

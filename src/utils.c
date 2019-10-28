@@ -96,7 +96,6 @@ uncompress(ctype_fd dirfd, ctype_fd fd)
 	switch (c_sys_fork()) {
 	case -1:
 		c_err_die(1, "c_sys_fork");
-		/* NOT REACHED */
 	case 0:
 		c_sys_dup(fd, 0);
 		c_sys_dup(fds[1], 1);
@@ -149,7 +148,6 @@ dofetch(ctype_fd dirfd, char *url)
 	switch (c_sys_fork()) {
 	case -1:
 		c_err_die(1, "c_sys_fork");
-		/* NOT REACHED */
 	case 0:
 		efchdir(dirfd);
 		av = avmake3(fetch, f, url);
@@ -283,7 +281,7 @@ checksum_whirlpool(ctype_fd dirfd, char *s)
 		*siz++ = 0;
 		if ((fd = c_sys_open(s, C_OREAD, 0)) < 0)
 			c_err_die(1, "c_sys_open %s", s);
-		n = estrtovl(siz, 8, 0, C_UVLONGMAX);
+		n = estrtovl(siz, 8, 0, C_VLONGMAX);
 		if (docheck_whirlpool(fd, sum, n) < 0)
 			c_err_die(1, "%s: checksum mismatch", s);
 		break;
