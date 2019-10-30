@@ -1,4 +1,4 @@
-.Dd October 25, 2019
+.Dd October 30, 2019
 .Dt VENUS 1
 .Os
 .Sh NAME
@@ -7,7 +7,7 @@
 .Sh SYNOPSIS
 .Nm
 .Op Fl NLR
-.Fl Aadefi
+.Fl adefi
 .Ar pkg ...
 .Nm
 .Op Fl NLR
@@ -23,10 +23,8 @@ utility executes the set operation to each
 .Ar pkg .
 .Sh OPTIONS
 .Bl -tag -width Ds
-.It Fl A
-Set the operation to fetch, explode and add, and the database to remote.
 .It Fl a
-Set the operation to add and the database to remote.
+Set the operations to fetch and explode, and the database to remote.
 .It Fl d
 Set the operation to delete and the dabase to local.
 .It Fl e
@@ -54,12 +52,8 @@ Set the architecture of the system.
 Set the extension used by the compressor.
 .It Ev VENUS_FETCH
 Set the tool used to fetch the packages.
-.It Ev VENUS_FFLAGS
-Set the flags passed to the fetch tool.
 .It Ev VENUS_ROOT
 Set the location where the packages are going to be installed.
-.It Ev VENUS_UFLAGS
-Set the flags passed to the uncompressor tool.
 .It Ev VENUS_UNCOMPRESS
 Set the tool used to uncompress the packages.
 .It Ev VENUS_URL

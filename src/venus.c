@@ -25,6 +25,7 @@ struct package {
 static ctype_fd fd_cache;
 static ctype_fd fd_etc;
 static ctype_fd fd_remote;
+static ctype_fd fd_root;
 static ctype_fd fd_chksum;
 
 static char *arch;
@@ -32,7 +33,7 @@ static char *ext;
 static char *root;
 static char *url;
 
-ctype_fd fd_root;
+ctype_fd fd_dot;
 char *fetch;
 char *inflate;
 
@@ -157,13 +158,13 @@ pkglist(struct package *p, char *strtag, int tag)
 	if (!(pkg = pkgtag(p, strtag, tag)))
 		return 0;
 
-	if ((s = c_str_chr(pkg, C_USIZEMAX, '\t')))
+	if ((s = c_str_chr(pkg, C_USIZEMAX, ' ')))
 		*s++ = 0;
 
 	c_ioq_fmt(ioq1, "%s", pkg);
 
 	while ((pkg = pkgtag(p, s, tag))) {
-		if ((s = c_str_chr(pkg, C_USIZEMAX, '\t')))
+		if ((s = c_str_chr(pkg, C_USIZEMAX, ' ')))
 			*s++ = 0;
 		c_ioq_fmt(ioq1, " %s", pkg);
 	}
@@ -185,48 +186,6 @@ pkgfree(struct package *p)
 }
 
 /* pkg routines */
-static int
-pkgadd(struct package *p)
-{
-	ctype_arr arr;
-	u64int size;
-	usize n;
-	char *path, *pkg;
-	char *sum, *siz;
-
-	c_mem_set(&arr, sizeof(arr), 0);
-	if (c_dyn_fmt(&arr, "%s/%s#%s/", CACHEDIR, p->name, p->version) < 0)
-		c_err_die(1, "c_dyn_fmt");
-
-	n = c_arr_bytes(&arr);
-
-	while ((pkg = pkgtag(p, "files:", FILETAG))) {
-		if (!(sum = c_str_chr(pkg, C_USIZEMAX, ' ')))
-			c_err_diex(1, "%s: wrong database format", p->name);
-		*sum++ = 0;
-		if (!(siz = c_str_chr(sum, C_USIZEMAX, ' ')))
-			c_err_diex(1, "%s: wrong database format", p->name);
-		*siz++ = 0;
-
-		c_arr_trunc(&arr, n, sizeof(uchar));
-		if (c_dyn_fmt(&arr, "%s", pkg) < 0)
-			c_err_die(1, "c_dyn_fmt");
-
-		size = estrtovl(siz, 8, 0, C_VLONGMAX);
-		if (checksum_fletcher32(c_arr_data(&arr), sum, size) < 0)
-			c_err_die(1, "%s: checksum mismatch", c_arr_data(&arr));
-
-		path = concat(root, pkg);
-		makepath(path);
-		if (c_sys_rename(c_arr_data(&arr), path) < 0)
-			c_err_die(1, "c_sys_rename %s %s",
-			    c_arr_data(&arr), path);
-	}
-
-	c_dyn_free(&arr);
-	return 0;
-}
-
 static int
 pkgdel(struct package *p)
 {
@@ -261,7 +220,7 @@ pkgexplode(struct package *p)
 	if ((fd = c_sys_open(c_arr_data(&arr), C_OREAD, 0)) < 0)
 		c_err_die(1, "c_sys_open %s", c_arr_data(&arr));
 
-	uncompress(fd_remote, fd);
+	uncompress(fd_root, fd);
 	c_sys_close(fd);
 
 	return 0;
@@ -279,7 +238,9 @@ pkgfetch(struct package *p)
 
 	dofetch(fd_cache, c_arr_data(&arr));
 	c_sys_seek(fd_chksum, 0, SEEK_SET);
+	efchdir(fd_cache);
 	checksum_whirlpool(fd_chksum, c_gen_basename(c_arr_data(&arr)));
+	efchdir(fd_dot);
 
 	c_dyn_free(&arr);
 	return 0;
@@ -302,7 +263,7 @@ pkginfo(struct package *p)
 static int
 pkginstall(struct package *p)
 {
-	return pkgfetch(p) || pkgexplode(p) || pkgadd(p);
+	return pkgfetch(p) || pkgexplode(p);
 }
 
 static int
@@ -331,7 +292,7 @@ pkgupdate(struct package *p)
 
 	(void)p;
 	c_mem_set(&arr, sizeof(arr), 0);
-	if (c_dyn_fmt(&arr, "%s/%s", url, RDBNAME) < 0)
+	if (c_dyn_fmt(&arr, "%s/%s/%s", url, arch, RDBNAME) < 0)
 		c_err_die(1, "c_dyn_fmt");
 
 	dofetch(fd_cache, c_arr_data(&arr));
@@ -385,10 +346,6 @@ venus_main(int argc, char **argv)
 	fn = nil;
 
 	C_ARGBEGIN {
-	case 'A':
-		db = REMOTEDB;
-		fn = pkginstall;
-		break;
 	case 'N':
 		tdb = "";
 		break;
@@ -400,7 +357,7 @@ venus_main(int argc, char **argv)
 		break;
 	case 'a':
 		db = REMOTEDB;
-		fn = pkgadd;
+		fn = pkginstall;
 		break;
 	case 'd':
 		db = LOCALDB;
@@ -469,7 +426,7 @@ venus_main(int argc, char **argv)
 	if ((fd_remote = c_sys_open(REMOTEDB, C_OREAD, 0)) < 0)
 		c_err_die(1, "c_sys_open " REMOTEDB);
 
-	if ((fd_root = c_sys_open(".", C_OREAD, 0)) < 0)
+	if ((fd_dot = c_sys_open(".", C_OREAD, 0)) < 0)
 		c_err_die(1, "c_sys_open <dot>");
 
 	if (fn == pkgupdate)
@@ -477,6 +434,9 @@ venus_main(int argc, char **argv)
 
 	if ((fd_chksum = c_sys_open(CHKSUMFILE, C_OREAD, 0)) < 0)
 		c_err_die(1, "c_sys_open " CHKSUMFILE);
+
+	if ((fd_root = c_sys_open(root, C_OREAD, 0)) < 0)
+		c_err_die(1, "c_sys_open %s", root);
 
 	if (tdb)
 		db = tdb;

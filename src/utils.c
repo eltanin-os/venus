@@ -99,17 +99,17 @@ uncompress(ctype_fd dirfd, ctype_fd fd)
 	case 0:
 		c_sys_dup(fd, 0);
 		c_sys_dup(fds[1], 1);
+		c_sys_close(fds[0]);
+		c_sys_close(fds[1]);
 		av = avmake3(inflate, nil, nil);
 		c_exc_run(*av, av);
-		c_err_die(1, "c_exc_run %s", uncompress);
+		c_err_die(1, "c_exc_run %s", inflate);
 	}
-
+	c_sys_close(fds[1]);
 	efchdir(dirfd);
 	unarchivefd(fds[0]);
-	efchdir(fd_root);
-
+	efchdir(fd_dot);
 	c_sys_close(fds[0]);
-	c_sys_close(fds[1]);
 }
 
 static char *
@@ -154,9 +154,7 @@ dofetch(ctype_fd dirfd, char *url)
 		c_exc_run(*av, av);
 		c_err_die(1, "c_sys_run %s", fetch);
 	}
-
-	if (c_sys_wait(nil) < 0)
-		c_err_diex(1, "fetch failed");
+	c_sys_wait(nil);
 }
 
 /* var routines */
@@ -207,9 +205,11 @@ concat(char *p1, char *p2)
 {
 	static char buf[C_PATHMAX];
 	ctype_arr arr;
+	char *sep;
 
 	c_arr_init(&arr, buf, sizeof(buf));
-	c_arr_fmt(&arr, "%s/%s", p1, p2);
+	sep = p1[c_str_len(p1, C_USIZEMAX) - 1] == '/' ? "" : "/";
+	c_arr_fmt(&arr, "%s%s%s", p1, sep, p2);
 	return c_arr_data(&arr);
 }
 
@@ -291,23 +291,31 @@ checksum_whirlpool(ctype_fd dirfd, char *s)
 }
 
 int
-checksum_fletcher32(char *file, char *sum, u64int size)
+checksum_fletcher32(char *file, char *sum, u64int siz)
 {
 	ctype_fd fd;
 	ctype_hst hs;
 	ctype_stat st;
+	size r;
+	char buf[C_PATHMAX];
 
-	if ((fd = c_sys_open(file, C_OREAD, 0)) < 0)
-		c_err_die(1, "c_sys_open %s", file);
+	if (c_sys_lstat(&st, file) < 0)
+		c_err_die(1, "c_sys_stat %s", file);
 
-	if (c_sys_fstat(&st, fd) < 0)
-		c_err_die(1, "c_sys_fstat %s", file);
-
-	if (st.size != size)
+	if (st.size != siz)
 		return -1;
 
-	if (c_hsh_putfd(&hs, c_hsh_fletcher32, fd, st.size) < 0)
-		c_err_die(1, "c_hsh_putfd %s", file);
+	if (C_ISLNK(st.mode)) {
+		if ((r = c_sys_readlink(buf, sizeof(buf), file)) < 0)
+			c_err_die(1, "c_sys_readlink %s", file);
+		c_hsh_all(&hs, c_hsh_fletcher32, buf, r);
+	} else {
+		if ((fd = c_sys_open(file, C_OREAD, 0)) < 0)
+			c_err_die(1, "c_sys_open %s", file);
+
+		if (c_hsh_putfd(&hs, c_hsh_fletcher32, fd, st.size) < 0)
+			c_err_die(1, "c_hsh_putfd %s", file);
+	}
 
 	if (estrtovl(sum, 8, 0, C_UINTMAX) != c_hsh_state0(&hs))
 		return -1;
@@ -321,7 +329,8 @@ makepath(char *path)
 {
 	char *s;
 
-	s = path;
+	path = sdup(path, c_str_len(path, C_USIZEMAX));
+	s = path + (*path == '/');
 
 	for (;;) {
 		if (!(s = c_str_chr(s, C_USIZEMAX, '/')))

@@ -30,6 +30,6 @@ int cksum_main(int, char **);
 int venus_main(int, char **);
 
 /* global variables */
-extern int fd_root;
+extern int fd_dot;
 extern char *fetch;
 extern char *inflate;

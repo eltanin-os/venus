@@ -154,14 +154,15 @@ unarchivefd(int afd)
 
 		s = c_arr_data(&arr);
 		eioqgetall(fp, s, h.namesize);
+		s[h.namesize] = 0;
 
+		makepath(s);
 		if (C_ISLNK(h.mode)) {
 			eioqgetall(fp, buf, h.size);
-			makepath(s);
+			buf[h.size] = 0;
 			if (c_sys_symlink(buf, s))
 				c_err_die(1, "c_sys_symlink %s %s", buf, s);
 		} else {
-			makepath(s);
 			if ((fd = c_sys_open(s, WOPTS, WMODE)) < 0)
 				c_err_die(1, "c_sys_open %s", s);
 			while (h.size) {
