@@ -110,6 +110,7 @@ uncompress(ctype_fd dirfd, ctype_fd fd)
 	unarchivefd(fds[0]);
 	efchdir(fd_dot);
 	c_sys_close(fds[0]);
+	c_sys_wait(nil);
 }
 
 static char *
@@ -283,7 +284,7 @@ checksum_whirlpool(ctype_fd dirfd, char *s)
 			c_err_die(1, "c_sys_open %s", s);
 		n = estrtovl(siz, 8, 0, C_VLONGMAX);
 		if (docheck_whirlpool(fd, sum, n) < 0)
-			c_err_die(1, "%s: checksum mismatch", s);
+			c_err_diex(1, "%s: checksum mismatch", s);
 		break;
 	}
 	if (!check)
