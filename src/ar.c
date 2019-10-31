@@ -160,6 +160,7 @@ unarchivefd(int afd)
 		if (C_ISLNK(h.mode)) {
 			eioqgetall(fp, buf, h.size);
 			buf[h.size] = 0;
+			c_sys_unlink(s);
 			if (c_sys_symlink(buf, s))
 				c_err_die(1, "c_sys_symlink %s %s", buf, s);
 		} else {

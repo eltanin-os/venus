@@ -33,6 +33,8 @@ static char *ext;
 static char *root;
 static char *url;
 
+static int hardreg;
+
 ctype_fd fd_dot;
 char *fetch;
 char *inflate;
@@ -182,7 +184,6 @@ pkgfree(struct package *p)
 	c_std_free(p->license);
 	c_std_free(p->description);
 	c_std_free(p->size);
-	c_mem_set(p, sizeof(*p), 0);
 }
 
 /* pkg routines */
@@ -209,7 +210,8 @@ pkgdel(struct package *p)
 static int
 pkgexplode(struct package *p)
 {
-	ctype_arr arr;
+	ctype_arr arr, dest;
+	ctype_ioq *fp;
 	ctype_fd fd;
 
 	c_mem_set(&arr, sizeof(arr), 0);
@@ -222,6 +224,30 @@ pkgexplode(struct package *p)
 
 	uncompress(fd_root, fd);
 	c_sys_close(fd);
+
+	c_arr_trunc(&arr, 0, sizeof(uchar));
+	if (c_dyn_fmt(&arr, "%s/%s", REMOTEDB, p->name) < 0)
+		c_err_die(1, "c_dyn_fmt");
+
+	c_mem_set(&dest, sizeof(dest), 0);
+	if (c_dyn_fmt(&dest, "%s/%s", LOCALDB, p->name) < 0)
+		c_err_die(1, "c_dyn_fmt");
+
+	if (hardreg) {
+		if ((fd = c_sys_open(c_arr_data(&dest),
+		     C_OCREATE | C_OWRITE, C_DEFFILEMODE)) < 0)
+			c_err_die(1, "c_sys_open %s", c_arr_data(&dest));
+		if (!(fp = new_ioqfd(fd, c_sys_write)))
+			c_err_die(1, "new_ioqfd");
+		if (c_ioq_putfile(fp, c_arr_data(&arr)) < 0)
+			c_err_die(1, "c_ioq_putfile");
+		c_std_free(fp);
+		c_sys_close(fd);
+	} else {
+		if (c_sys_symlink(c_arr_data(&arr), c_arr_data(&dest)) < 0)
+			c_err_die(1, "c_sys_symlink %s %s",
+			    c_arr_data(&arr), c_arr_data(&dest));
+	}
 
 	return 0;
 }
@@ -322,7 +348,7 @@ static void
 usage(void)
 {
 	c_ioq_fmt(ioq2,
-	    "usage: %s [-NLR] -Aadefi [pkg ...]\n"
+	    "usage: %s [-HNLR] -Aadefi [pkg ...]\n"
 	    "       %s [-NLR] -l files|mdeps|rdeps [pkg ...]\n"
 	    "       %s -u\n",
 	    c_std_getprogname(), c_std_getprogname(), c_std_getprogname());
@@ -346,6 +372,9 @@ venus_main(int argc, char **argv)
 	fn = nil;
 
 	C_ARGBEGIN {
+	case 'H':
+		hardreg = 1;
+		break;
 	case 'N':
 		tdb = "";
 		break;
@@ -459,6 +488,7 @@ venus_main(int argc, char **argv)
 		rv |= fn(&pkg);
 
 		pkgfree(&pkg);
+		pkg.tag = 0;
 		c_sys_close(fd);
 	}
 

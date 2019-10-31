@@ -1,4 +1,4 @@
-.Dd October 30, 2019
+.Dd October 31, 2019
 .Dt VENUS 1
 .Os
 .Sh NAME
@@ -6,7 +6,7 @@
 .Nd package manager
 .Sh SYNOPSIS
 .Nm
-.Op Fl NLR
+.Op Fl HNLR
 .Fl adefi
 .Ar pkg ...
 .Nm
@@ -31,6 +31,8 @@ Set the operation to delete and the dabase to local.
 Set the operation to explode and the database to remote.
 .It Fl f
 Set the operation to fetch and the database to remote.
+.It Fl H
+Set the register operation as copy.
 .It Fl i
 Set the operation to info and the database to local.
 .It Fl L
