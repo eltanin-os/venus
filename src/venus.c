@@ -190,6 +190,7 @@ pkgfree(struct package *p)
 static int
 pkgdel(struct package *p)
 {
+	ctype_arr arr;
 	int rv;
 	char *pkg, *s;
 
@@ -204,6 +205,12 @@ pkgdel(struct package *p)
 		rv |= destroypath(s, c_str_len(s, C_USIZEMAX));
 	}
 
+	c_mem_set(&arr, sizeof(arr), 0);
+	if (c_dyn_fmt(&arr, "%s/%s", LOCALDB, p->name) < 0)
+		c_err_die(1, "c_dyn_fmt");
+
+	c_sys_unlink(c_arr_data(&arr));
+	c_dyn_free(&arr);
 	return rv;
 }
 
@@ -249,6 +256,7 @@ pkgexplode(struct package *p)
 			    c_arr_data(&arr), c_arr_data(&dest));
 	}
 
+	c_dyn_free(&arr);
 	return 0;
 }
 
