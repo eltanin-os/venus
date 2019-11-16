@@ -367,7 +367,6 @@ int
 venus_main(int argc, char **argv)
 {
 	struct package pkg;
-	ctype_arr arr;
 	ctype_fd fd;
 	ctype_ioq ioq;
 	int (*fn)(struct package *);
@@ -481,16 +480,13 @@ venus_main(int argc, char **argv)
 	c_mem_set(&pkg, sizeof(pkg), 0);
 	pkg.fp = &ioq;
 
-	c_arr_init(&arr, buf, sizeof(buf));
-
 	for (; *argv; --argc, ++argv) {
 		tmp = concat(db, *argv);
 		if ((fd = c_sys_open(tmp, C_OREAD, 0)) < 0) {
 			rv = c_err_warn("c_sys_open %s", tmp);
 			continue;
 		}
-		c_arr_trunc(&arr, 0, sizeof(uchar));
-		c_ioq_init(&ioq, fd, &arr, c_sys_read);
+		c_ioq_init(&ioq, fd, buf, sizeof(buf), c_sys_read);
 
 		pkgdata(&pkg);
 		rv |= fn(&pkg);

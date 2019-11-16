@@ -168,8 +168,8 @@ unarchivefd(int afd)
 				c_err_die(1, "c_sys_open %s", s);
 			while (h.size) {
 				r = eioqget(fp, buf, C_MIN(C_BIOSIZ, h.size));
-				if (c_sys_allrw(c_sys_write, fd, buf, r) < 0)
-					c_err_die(1, "c_sys_allrw");
+				if (c_std_allrw(c_sys_write, fd, buf, r) < 0)
+					c_err_die(1, "c_std_allrw");
 				h.size -= r;
 			}
 			if (c_sys_fchmod(fd, h.mode) < 0)

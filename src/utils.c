@@ -4,7 +4,6 @@
 #include "common.h"
 #include "config.h"
 
-#define IOQSIZ (sizeof(ctype_arr) + sizeof(ctype_ioq))
 #define HDEC(x) ((x <= '9') ? x - '0' : (((uchar)x | 32) - 'a') + 10)
 
 /* dynamic routines */
@@ -20,20 +19,15 @@ getln(ctype_ioq *fp)
 ctype_ioq *
 new_ioqfd(ctype_fd fd, ctype_iofn func)
 {
-	ctype_arr *ap;
 	ctype_ioq *fp;
 	uchar *p;
 
-	if (!(p = c_std_alloc(IOQSIZ + C_BIOSIZ, sizeof(uchar))))
+	if (!(p = c_std_alloc(sizeof(*fp) + C_BIOSIZ, sizeof(uchar))))
 		return nil;
 
 	fp = (void *)p;
 	p += sizeof(*fp);
-	ap = (void *)p;
-	p += sizeof(*ap);
-
-	c_arr_init(ap, (void *)p, C_BIOSIZ);
-	c_ioq_init(fp, fd, ap, func);
+	c_ioq_init(fp, fd, (void *)p, C_BIOSIZ, func);
 	return fp;
 }
 
