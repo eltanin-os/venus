@@ -48,10 +48,14 @@ conf_start(void)
 	ctype_ioq *fp;
 	char *s;
 
-	s = concat(c_sys_getenv("HOME"), LOCALCONF);
+	if (!(s = c_sys_getenv("HOME")))
+		goto open_configfile;
+
+	s = concat(s, LOCALCONF);
 	if ((fd = c_sys_open(s, C_OREAD, 0)) < 0) {
 		if (errno != C_ENOENT)
 			c_err_die(1, "c_sys_open %s", s);
+open_configfile:
 		if ((fd = c_sys_open(CONFIGFILE, C_OREAD, 0)) < 0)
 			c_err_die(1, "c_sys_open " CONFIGFILE);
 	}
