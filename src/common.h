@@ -11,7 +11,6 @@ char **avmake3(char *, char *, char *);
 char *concat(char *, char *);
 char *sdup(char *, uint);
 ctype_arr *getln(ctype_ioq *);
-ctype_ioq *new_ioqfd(ctype_fd, ctype_iofn);
 int checksum_fletcher32(char *, char *, u64int);
 void checksum_whirlpool(ctype_fd fd, char *);
 int destroypath(char *, usize);

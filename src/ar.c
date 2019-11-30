@@ -54,7 +54,7 @@ archivefd(int afd, char **av)
 	ctype_ioq *fp;
 	char buf[C_PATHMAX];
 
-	if (!(fp = new_ioqfd(afd, c_sys_write)))
+	if (!(fp = c_ioq_new(C_BIOSIZ, afd, c_sys_write)))
 		c_err_die(1, "ioqfd_new");
 
 	c_ioq_put(fp, MAGIC);
@@ -126,7 +126,7 @@ unarchivefd(int afd)
 	char *s;
 	char buf[C_BIOSIZ], hbuf[40];
 
-	if (!(fp = new_ioqfd(afd, c_sys_read)))
+	if (!(fp = c_ioq_new(C_BIOSIZ, afd, c_sys_read)))
 		c_err_die(1, "ioqfd_new");
 
 	eioqgetall(fp, hbuf, sizeof(MAGIC) - 1);

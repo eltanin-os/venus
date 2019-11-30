@@ -16,21 +16,6 @@ getln(ctype_ioq *fp)
 	return c_ioq_getln(fp, &arr) > 0 ? &arr : nil;
 }
 
-ctype_ioq *
-new_ioqfd(ctype_fd fd, ctype_iofn func)
-{
-	ctype_ioq *fp;
-	uchar *p;
-
-	if (!(p = c_std_alloc(sizeof(*fp) + C_BIOSIZ, sizeof(uchar))))
-		return nil;
-
-	fp = (void *)p;
-	p += sizeof(*fp);
-	c_ioq_init(fp, fd, (void *)p, C_BIOSIZ, func);
-	return fp;
-}
-
 /* fail routines */
 void
 efchdir(ctype_fd fd)
@@ -256,8 +241,8 @@ checksum_whirlpool(ctype_fd dirfd, char *s)
 	int check;
 	char *sum, *siz;
 
-	if (!(fp = new_ioqfd(dirfd, c_sys_read)))
-		c_err_die(1, "new_ioqfd");
+	if (!(fp = c_ioq_new(C_BIOSIZ, dirfd, c_sys_read)))
+		c_err_die(1, "c_ioq_new");
 
 	check = 0;
 	while ((ap = getln(fp))) {

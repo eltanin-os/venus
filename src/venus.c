@@ -60,8 +60,8 @@ open_configfile:
 			c_err_die(1, "c_sys_open " CONFIGFILE);
 	}
 
-	if (!(fp = new_ioqfd(fd, c_sys_read)))
-		c_err_die(1, "new_ioqfd");
+	if (!(fp = c_ioq_new(C_BIOSIZ, fd, c_sys_read)))
+		c_err_die(1, "c_ioq_new");
 
 	while ((ap = getln(fp))) {
 		s = c_arr_data(ap);
@@ -248,8 +248,8 @@ pkgexplode(struct package *p)
 		if ((fd = c_sys_open(c_arr_data(&dest),
 		     C_OCREATE | C_OWRITE, C_DEFFILEMODE)) < 0)
 			c_err_die(1, "c_sys_open %s", c_arr_data(&dest));
-		if (!(fp = new_ioqfd(fd, c_sys_write)))
-			c_err_die(1, "new_ioqfd");
+		if (!(fp = c_ioq_new(C_BIOSIZ, fd, c_sys_write)))
+			c_err_die(1, "c_ioq_new");
 		if (c_ioq_putfile(fp, c_arr_data(&arr)) < 0)
 			c_err_die(1, "c_ioq_putfile");
 		c_std_free(fp);
