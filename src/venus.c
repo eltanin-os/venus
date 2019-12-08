@@ -360,7 +360,7 @@ static void
 usage(void)
 {
 	c_ioq_fmt(ioq2,
-	    "usage: %s [-HNLR] -Aadefi [pkg ...]\n"
+	    "usage: %s [-HNLR] -adefi [pkg ...]\n"
 	    "       %s [-NLR] -l files|mdeps|rdeps [pkg ...]\n"
 	    "       %s -u\n",
 	    c_std_getprogname(), c_std_getprogname(), c_std_getprogname());
