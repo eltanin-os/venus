@@ -3,7 +3,27 @@
 
 #include "common.h"
 
-static char *slashv[2] = { "-", nil };
+static int
+hlink(ctype_hst *p, ctype_hmd *md, char *s)
+{
+	ctype_arr arr;
+	ctype_stat st;
+	size r;
+
+	if (c_sys_lstat(&st, s) < 0 || !C_ISLNK(st.mode))
+		return 0;
+
+	c_mem_set(&arr, sizeof(arr), 0);
+	if (c_dyn_ready(&arr, st.size, sizeof(uchar)) < 0)
+		c_err_die(1, "c_dyn_ready");
+
+	if ((r = c_sys_readlink(c_arr_data(&arr), st.size, s)) < 0)
+		c_err_die(1, "c_sys_readlink %s", s);
+
+	c_hsh_all(p, md, c_arr_data(&arr), r);
+	c_dyn_free(&arr);
+	return 1;
+}
 
 static void
 usage(void)
@@ -15,56 +35,52 @@ usage(void)
 int
 cksum_main(int argc, char **argv)
 {
-	ctype_hmd *hfn;
 	ctype_hst hs;
-	ctype_stat st;
-	int i, rv;
-	size r;
-	char buf[C_PATHMAX];
+	ctype_hmd *md;
+	int i, r;
+	char buf[C_HWHIRLPOOL_DIGEST];
+	char tmp[2];
 
-	c_std_setprogname(argv[0]);
-	hfn = c_hsh_fletcher32;
+	md = c_hsh_fletcher32;
 
 	C_ARGBEGIN {
 	case 'w':
-		hfn = c_hsh_whirlpool;
+		md = c_hsh_whirlpool;
 		break;
 	default:
 		usage();
 	} C_ARGEND
 
-	if (!argc)
-		argv = slashv;
+	if (!argc) {
+		tmp[0] = '-';
+		tmp[1] = '\0';
+		*argv = tmp;
+	}
 
-	rv = 0;
+	r = 0;
 
-	for (; *argv; --argc, ++argv) {
-		if (!c_sys_lstat(&st, *argv) && C_ISLNK(st.mode)) {
-			if ((r = c_sys_readlink(buf, sizeof(buf), *argv)) < 0) {
-				rv = c_err_warn("c_sys_readlink %s", *argv);
-				continue;
-			}
-			c_hsh_all(&hs, hfn, buf, r);
+	for (; *argv; ++argv) {
+		if (hlink(&hs, md, *argv)) {
+			;
 		} else {
 			if (C_ISDASH(*argv))
 				*argv = "<stdin>";
-			if (c_hsh_putfile(&hs, hfn, *argv) < 0) {
-				rv = c_err_warn("c_hsh_putfile %s", *argv);
+			if (c_hsh_putfile(&hs, md, *argv)) {
+				r = c_err_warn("c_hsh_putfile %s", *argv);
 				continue;
 			}
 		}
-		if (hfn == c_hsh_whirlpool) {
-			c_hsh_digest(&hs, hfn, buf);
-			c_ioq_fmt(ioq1, "%s ", *argv);
-			for (i = 0; i < 64; ++i)
+		c_hsh_digest(&hs, md, buf);
+		c_ioq_fmt(ioq1, "%s ", *argv);
+		if (md == c_hsh_whirlpool) {
+			for (i = 0; i < C_HWHIRLPOOL_DIGEST; ++i)
 				c_ioq_fmt(ioq1, "%02x", (uchar)buf[i]);
-			c_ioq_fmt(ioq1, " %o\n", hs.len);
-			continue;
+		} else {
+			c_ioq_fmt(ioq1, "%o", *(u32int *)(uintptr)buf);
 		}
-		c_ioq_fmt(ioq1, "%s %o %o\n", *argv, c_hsh_state0(&hs), hs.len);
+		c_ioq_fmt(ioq1, " %o", c_hsh_len(&hs));
 	}
 
 	c_ioq_flush(ioq1);
-
-	return rv;
+	return r;
 }

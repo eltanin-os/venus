@@ -2,7 +2,13 @@
 #include <tertium/std.h>
 
 #include "common.h"
-#include "config.h"
+
+#define LARG(a) \
+(!CSTRCMP("files", (a)) ? &pkglfiles  :\
+ (!CSTRCMP("mdeps", (a)) ? &pkglmdeps :\
+ (!CSTRCMP("rdeps", (a)) ? &pkglrdeps :\
+ (usage(), (int (*)(struct package *))nil))))
+
 
 enum {
 	NOTAG,
@@ -12,280 +18,311 @@ enum {
 };
 
 struct package {
-	ctype_ioq *fp;
+	ctype_ioq *p;
 	int tag;
-	char *name;
-	char *version;
-	char *license;
-	char *description;
-	char *size;
+	ctype_arr name;
+	ctype_arr version;
+	ctype_arr license;
+	ctype_arr description;
+	ctype_arr size;
 };
 
-/* dirs */
-static ctype_fd fd_cache;
-static ctype_fd fd_etc;
-static ctype_fd fd_remote;
-static ctype_fd fd_root;
-static ctype_fd fd_chksum;
+/* path fd */
+ctype_fd fd_cache;
+ctype_fd fd_etc;
+ctype_fd fd_remote;
+ctype_fd fd_root;
+ctype_fd fd_chksum;
 
-static char *arch;
-static char *ext;
-static char *root;
-static char *url;
-
-static int hardreg;
-
-ctype_fd fd_dot;
+/* config */
+char *arch;
+char *extension;
 char *fetch;
-char *inflate;
+char *root;
+char *uncompress;
+char *url;
+
+/* global options */
+static int regmode;
 
 /* env routines */
 static void
-conf_start(void)
+readcfg(void)
 {
 	ctype_arr *ap;
+	ctype_arr arr;
+	ctype_ioq ioq;
 	ctype_fd fd;
-	ctype_ioq *fp;
+	char buf[C_BIOSIZ];
 	char *s;
 
-	if (!(s = c_sys_getenv("HOME")))
-		goto open_configfile;
-
-	s = concat(s, LOCALCONF);
-	if ((fd = c_sys_open(s, C_OREAD, 0)) < 0) {
-		if (errno != C_ENOENT)
-			c_err_die(1, "c_sys_open %s", s);
-open_configfile:
-		if ((fd = c_sys_open(CONFIGFILE, C_OREAD, 0)) < 0)
+	if ((s = c_sys_getenv("HOME"))) {
+		c_mem_set(&arr, sizeof(arr), 0);
+		if (c_dyn_fmt(&arr, "%s/%s", s, LOCALCONF) < 0)
+			c_err_die(1, "c_dyn_fmt");
+		if ((fd = c_sys_open(c_arr_data(&arr), ROPTS, RMODE)) < 0) {
+			if (errno != C_ENOENT)
+				c_err_die(1, "c_sys_open %s", c_arr_data(&arr));
+			s = nil;
+		}
+		c_dyn_free(&arr);
+	}
+	if (!s) {
+		if ((fd = c_sys_open(CONFIGFILE, ROPTS, RMODE)) < 0)
 			c_err_die(1, "c_sys_open " CONFIGFILE);
 	}
 
-	if (!(fp = c_ioq_new(C_BIOSIZ, fd, c_sys_read)))
-		c_err_die(1, "c_ioq_new");
-
-	while ((ap = getln(fp))) {
+	c_ioq_init(&ioq, fd, buf, sizeof(buf), &c_sys_read);
+	while ((ap = getln(&ioq))) {
 		s = c_arr_data(ap);
-		s[c_arr_bytes(ap) - 1] = 0;
 		if (*s == '#')
 			continue;
 		if (!(s = c_str_chr(s, C_USIZEMAX, '=')))
 			continue;
 		*s++ = 0;
-		if (!STRCMP("arch", c_arr_data(ap)))
-			assign(&arch, s);
-		else if (!STRCMP("extension", c_arr_data(ap)))
-			assign(&ext, s);
-		else if (!STRCMP("fetch", c_arr_data(ap)))
-			assign(&fetch, s);
-		else if (!STRCMP("root", c_arr_data(ap)))
-			assign(&root, s);
-		else if (!STRCMP("uncompress", c_arr_data(ap)))
-			assign(&inflate, s);
-		else if (!STRCMP("url", c_arr_data(ap)))
-			assign(&url, s);
-	}
+		if (!arch && !CSTRCMP("arch", c_arr_data(ap)))
+			arch = estrdup(s);
+		else if (!extension && !CSTRCMP("extension", c_arr_data(ap)))
+			extension = estrdup(s);
+		else if (!fetch && !CSTRCMP("fetch", c_arr_data(ap)))
+			fetch = estrdup(s);
+		else if (!root && !CSTRCMP("root", c_arr_data(ap)))
+			root = estrdup(s);
+		else if (!uncompress && !CSTRCMP("uncompress", c_arr_data(ap)))
+			uncompress = estrdup(s);
+		else if (!url && !CSTRCMP("url", c_arr_data(ap)))
+			url = estrdup(s);
 
-	c_std_free(fp);
+	}
 	c_sys_close(fd);
+}
+
+static void
+readenv(void)
+{
+	char *tmp;
+
+	if ((tmp = c_sys_getenv("VENUS_ARCH")))
+		arch = tmp;
+	if ((tmp = c_sys_getenv("VENUS_EXTENSION")))
+		extension = tmp;
+	if ((tmp = c_sys_getenv("VENUS_FETCH")))
+		fetch = tmp;
+	if ((tmp = c_sys_getenv("VENUS_ROOT")))
+		root = tmp;
+	if ((tmp = c_sys_getenv("VENUS_UNCOMPRESS")))
+		uncompress = tmp;
+	if ((tmp = c_sys_getenv("VENUS_URL")))
+		url = tmp;
+}
+
+static void
+startfd(void)
+{
+	if ((fd_cache = c_sys_open(CACHEDIR, ROPTS, RMODE)) < 0)
+		c_err_die(1, "c_sys_open " CACHEDIR);
+	if ((fd_chksum = c_sys_open(CHKSUMFILE, ROPTS, RMODE)) < 0)
+		c_err_die(1, "c_sys_open " CHKSUMFILE);
+	if ((fd_etc = c_sys_open(ETCDIR, ROPTS, RMODE)) < 0)
+		c_err_die(1, "c_sys_open " ETCDIR);
+	if ((fd_remote = c_sys_open(REMOTEDB, ROPTS, RMODE)) < 0)
+		c_err_die(1, "c_sys_open " REMOTEDB);
+	if ((fd_root = c_sys_open(root, C_OREAD, 0)) < 0)
+		c_err_die(1, "c_sys_open %s", root);
 }
 
 /* pkg db routines */
 static void
-pkgdata(struct package *p)
+pkgdata(struct package *pkg)
 {
-	ctype_arr *ap;
-	char *s, *v;
+	ctype_arr *ap, *target;
+	char *p, *s;
 
-	while ((ap = getln(p->fp))) {
-		v = c_arr_data(ap);
-		v[c_arr_bytes(ap) - 1] = 0;
-		if (*v != '#')
-			break;
-		if (!(v = c_str_chr(v, C_USIZEMAX, ':')))
-			continue;
-		*v++ = 0;
-		while (*v == ' ')
-			*v++ = 0;
+	c_arr_trunc(&pkg->name, 0, sizeof(uchar));
+	c_arr_trunc(&pkg->version, 0, sizeof(uchar));
+	c_arr_trunc(&pkg->license, 0, sizeof(uchar));
+	c_arr_trunc(&pkg->description, 0, sizeof(uchar));
+	c_arr_trunc(&pkg->size, 0, sizeof(uchar));
 
+	while ((ap = getln(pkg->p))) {
 		s = c_arr_data(ap);
-		++s;
-		while (*s == ' ')
-			*s++ = 0;
+		if (!(p = c_str_chr(s, C_USIZEMAX, ':')))
+			continue;
+		*p = 0;
 
-		if (!STRCMP("name", s))
-			assign(&p->name, v);
-		else if (!STRCMP("version", s))
-			assign(&p->version, v);
-		else if (!STRCMP("license", s))
-			assign(&p->license, v);
-		else if (!STRCMP("description", s))
-			assign(&p->description, v);
-		else if (!STRCMP("size", s))
-			assign(&p->size, v);
+		p += 2; /*:<blank>*/
+		s += 2; /*#<blank>*/
 
-		s = c_ioq_peek(p->fp);
+		if (!CSTRCMP("name", s))
+			target = &pkg->name;
+		else if (!CSTRCMP("version", s))
+			target = &pkg->version;
+		else if (!CSTRCMP("license", s))
+			target = &pkg->license;
+		else if (!CSTRCMP("description", s))
+			target = &pkg->description;
+		else if (!CSTRCMP("size", s))
+			target = &pkg->size;
+		else
+			continue;
+
+		c_dyn_fmt(target, "%s", p);
+		s = c_ioq_peek(pkg->p);
 		if (*s != '#')
 			break;
 	}
 }
 
 static char *
-pkgtag(struct package *p, char *strtag, int tag)
+pkgtag(struct package *pkg, char *strtag, usize n, int tag)
 {
 	ctype_arr *ap;
-	usize n;
 	char *s;
 
-	while ((ap = getln(p->fp))) {
+	while ((ap = getln(pkg->p))) {
 		s = c_arr_data(ap);
-		n = c_arr_bytes(ap) - 1;
-		s[n] = 0;
-		if (p->tag == NOTAG) {
-			if (!c_str_cmp(strtag, n, c_arr_data(ap)))
-				p->tag = tag;
+		if (pkg->tag == NOTAG) {
+			if (!c_mem_cmp(strtag, n, s))
+				pkg->tag = tag;
 			continue;
 		}
-		s = c_arr_data(ap);
 		if (*s != '\t')
 			break;
-		++s;
-		return s;
+		return ++s;
 	}
 
-	p->tag = NOTAG;
+	pkg->tag = NOTAG;
 	return nil;
 }
 
-static int
-pkglist(struct package *p, char *strtag, int tag)
+static char *
+pkglist(struct package *pkg, char *strtag, usize n, int tag)
 {
-	char *pkg, *s;
+	char *s, *p;
 
-	if (!(pkg = pkgtag(p, strtag, tag)))
+	if (!(s = pkgtag(pkg, strtag, n, tag)))
 		return 0;
 
-	if ((s = c_str_chr(pkg, C_USIZEMAX, ' ')))
-		*s++ = 0;
+	if ((p = c_str_chr(s, C_USIZEMAX, ' ')))
+		*p = 0;
 
-	c_ioq_fmt(ioq1, "%s", pkg);
-
-	while ((pkg = pkgtag(p, s, tag))) {
-		if ((s = c_str_chr(pkg, C_USIZEMAX, ' ')))
-			*s++ = 0;
-		c_ioq_fmt(ioq1, " %s", pkg);
-	}
-
-	c_ioq_put(ioq1, "\n");
-
-	return 0;
+	return s;
 }
 
-static void
-pkgfree(struct package *p)
+static int
+writepkglist(struct package *pkg, char *strtag, usize n, int tag)
 {
-	c_std_free(p->name);
-	c_std_free(p->version);
-	c_std_free(p->license);
-	c_std_free(p->description);
-	c_std_free(p->size);
+	char *s;
+
+	if (!(s = pkglist(pkg, strtag, n, tag)))
+		return 0;
+
+	c_ioq_fmt(ioq1, "%s", s);
+	while ((s = pkglist(pkg, strtag, n, tag)))
+		c_ioq_fmt(ioq1, " %s", s);
+	c_ioq_put(ioq1, "\n");
+	return 0;
 }
 
 /* pkg routines */
 static int
-pkgdel(struct package *p)
+pkgdel(struct package *pkg)
 {
 	ctype_arr arr;
-	int rv;
-	char *pkg, *s;
+	int r;
+	char *s;
 
-	while ((pkg = pkgtag(p, "files:", FILETAG))) {
-		if ((s = c_str_chr(pkg, C_USIZEMAX, ' ')))
-			*s++ = 0;
-		s = concat(root, pkg);
-		if (c_sys_unlink(s) < 0) {
-			rv = c_err_warn("c_sys_unlink %s", s);
-			continue;
-		}
-		rv |= destroypath(s, c_str_len(s, C_USIZEMAX));
+	efchdir(fd_root);
+	r = 0;
+	while ((s = pkglist(pkg, "files:", sizeof("files:"), FILETAG))) {
+		c_arr_trunc(&arr, 0, sizeof(uchar));
+		if (c_dyn_fmt(&arr, "%s/%s", root, pkg) < 0)
+			c_err_die(1, "c_dyn_fmt");
+		r |= removepath(s);
 	}
 
-	c_mem_set(&arr, sizeof(arr), 0);
-	if (c_dyn_fmt(&arr, "%s/%s", LOCALDB, p->name) < 0)
+	c_arr_trunc(&arr, 0, sizeof(uchar));
+	if (c_dyn_fmt(&arr, "%s/%s", LOCALDB, c_arr_data(&pkg->name)) < 0)
 		c_err_die(1, "c_dyn_fmt");
-
 	c_sys_unlink(c_arr_data(&arr));
 	c_dyn_free(&arr);
-	return rv;
+	return r;
+}
+
+static void
+doregister(char *src, char *dest)
+{
+	ctype_ioq ioq;
+	ctype_fd fd;
+
+	if (regmode) {
+		if ((fd = c_sys_open(dest, WOPTS, WMODE)) < 0)
+			c_err_die(1, "c_sys_open %s", dest);
+		c_ioq_init(&ioq, fd, nil, 0, &c_sys_write);
+		if (c_ioq_putfile(&ioq, src) < 0)
+			c_err_die(1, "c_ioq_putfile");
+	} else {
+		if (c_sys_symlink(src, dest) < 0)
+			c_err_die(1, "c_sys_symlink %s %s", src, dest);
+	}
 }
 
 static int
-pkgexplode(struct package *p)
+pkgexplode(struct package *pkg)
 {
 	ctype_arr arr, dest;
-	ctype_ioq *fp;
 	ctype_fd fd;
 
 	c_mem_set(&arr, sizeof(arr), 0);
 	if (c_dyn_fmt(&arr, "%s/%s#%s.v%s",
-	    CACHEDIR, p->name, p->version, ext) < 0)
+	    CACHEDIR, c_arr_data(&pkg->name),
+	    c_arr_data(&pkg->version), extension) < 0)
 		c_err_die(1, "c_dyn_fmt");
 
-	if ((fd = c_sys_open(c_arr_data(&arr), C_OREAD, 0)) < 0)
+	if ((fd = c_sys_open(c_arr_data(&arr), ROPTS, RMODE)) < 0)
 		c_err_die(1, "c_sys_open %s", c_arr_data(&arr));
 
-	uncompress(fd_root, fd);
+	douncompress(fd_root, fd);
 	c_sys_close(fd);
 
-	c_arr_trunc(&arr, 0, sizeof(uchar));
-	if (c_dyn_fmt(&arr, "%s/%s", REMOTEDB, p->name) < 0)
+	if (c_dyn_fmt(&arr, "%s/%s", REMOTEDB, c_arr_data(&pkg->name)) < 0)
 		c_err_die(1, "c_dyn_fmt");
 
 	c_mem_set(&dest, sizeof(dest), 0);
-	if (c_dyn_fmt(&dest, "%s/%s", LOCALDB, p->name) < 0)
+	if (c_dyn_fmt(&dest, "%s/%s", LOCALDB, c_arr_data(&pkg->version)) < 0)
 		c_err_die(1, "c_dyn_fmt");
 
-	if (hardreg) {
-		if ((fd = c_sys_open(c_arr_data(&dest),
-		     C_OCREATE | C_OWRITE, C_DEFFILEMODE)) < 0)
-			c_err_die(1, "c_sys_open %s", c_arr_data(&dest));
-		if (!(fp = c_ioq_new(C_BIOSIZ, fd, c_sys_write)))
-			c_err_die(1, "c_ioq_new");
-		if (c_ioq_putfile(fp, c_arr_data(&arr)) < 0)
-			c_err_die(1, "c_ioq_putfile");
-		c_std_free(fp);
-		c_sys_close(fd);
-	} else {
-		if (c_sys_symlink(c_arr_data(&arr), c_arr_data(&dest)) < 0)
-			c_err_die(1, "c_sys_symlink %s %s",
-			    c_arr_data(&arr), c_arr_data(&dest));
-	}
-
+	doregister(c_arr_data(&arr), c_arr_data(&dest));
 	c_dyn_free(&arr);
+	c_dyn_free(&dest);
 	return 0;
 }
 
 static int
-pkgfetch(struct package *p)
+pkgfetch(struct package *pkg)
 {
 	ctype_arr arr;
 
 	c_mem_set(&arr, sizeof(arr), 0);
 	if (c_dyn_fmt(&arr, "%s/%s/%s#%s.v%s",
-	    url, arch, p->name, p->version, ext) < 0)
+	    url, arch, c_arr_data(&pkg->name),
+	    c_arr_data(&pkg->version), extension) < 0)
 		c_err_die(1, "c_dyn_fmt");
 
 	dofetch(fd_cache, c_arr_data(&arr));
-	c_sys_seek(fd_chksum, 0, SEEK_SET);
-	efchdir(fd_cache);
-	checksum_whirlpool(fd_chksum, c_gen_basename(c_arr_data(&arr)));
-	efchdir(fd_dot);
-
+	chksum_whirlpool(fd_cache, fd_chksum, c_gen_basename(c_arr_data(&arr)));
 	c_dyn_free(&arr);
 	return 0;
 }
 
 static int
-pkginfo(struct package *p)
+pkgadd(struct package *pkg)
+{
+	return pkgfetch(pkg) || pkgexplode(pkg);
+}
+
+static int
+pkginfo(struct package *pkg)
 {
 	c_ioq_fmt(ioq1,
 	    "Name: %s\n"
@@ -293,42 +330,37 @@ pkginfo(struct package *p)
 	    "License: %s\n"
 	    "Description: %s\n"
 	    "Size: %s\n",
-	    p->name, p->version, p->license,
-	    p->description, p->size);
+	    c_arr_data(&pkg->name), c_arr_data(&pkg->version),
+	    c_arr_data(&pkg->license), c_arr_data(&pkg->description),
+	    c_arr_data(&pkg->size));
 	return 0;
 }
 
 static int
-pkginstall(struct package *p)
+pkglfiles(struct package *pkg)
 {
-	return pkgfetch(p) || pkgexplode(p);
+	return writepkglist(pkg, "files:", sizeof("files:"), MDEPTAG);
 }
 
 static int
-pkglfiles(struct package *p)
+pkglmdeps(struct package *pkg)
 {
-	return pkglist(p, "files:", FILETAG);
+	return writepkglist(pkg, "mdeps:", sizeof("mdeps:"), MDEPTAG);
 }
 
 static int
-pkglmdeps(struct package *p)
+pkglrdeps(struct package *pkg)
 {
-	return pkglist(p, "makedeps:", MDEPTAG);
+	return writepkglist(pkg, "rdeps:", sizeof("rdeps:"), RDEPTAG);
 }
 
 static int
-pkglrdeps(struct package *p)
-{
-	return pkglist(p, "rundeps:", RDEPTAG);
-}
-
-static int
-pkgupdate(struct package *p)
+pkgupdate(struct package *pkg)
 {
 	ctype_arr arr;
 	ctype_fd fd;
 
-	(void)p;
+	(void)pkg;
 	c_mem_set(&arr, sizeof(arr), 0);
 	if (c_dyn_fmt(&arr, "%s/%s/%s", url, arch, RDBNAME) < 0)
 		c_err_die(1, "c_dyn_fmt");
@@ -339,10 +371,10 @@ pkgupdate(struct package *p)
 	if (c_dyn_fmt(&arr, "%s/%s", CACHEDIR, RDBNAME) < 0)
 		c_err_die(1, "c_dyn_fmt");
 
-	if ((fd = c_sys_open(c_arr_data(&arr), C_OREAD, 0)) < 0)
+	if ((fd = c_sys_open(c_arr_data(&arr), ROPTS, RMODE)) < 0)
 		c_err_die(1, "c_sys_open %s", c_arr_data(&arr));
 
-	uncompress(fd_remote, fd);
+	douncompress(fd_remote, fd);
 	c_sys_close(fd);
 
 	c_arr_trunc(&arr, 0, sizeof(uchar));
@@ -350,18 +382,16 @@ pkgupdate(struct package *p)
 		c_err_die(1, "c_dyn_fmt");
 
 	dofetch(fd_etc, c_arr_data(&arr));
-
 	c_dyn_free(&arr);
 	return 0;
 }
 
-/* main routines */
 static void
 usage(void)
 {
 	c_ioq_fmt(ioq2,
-	    "usage: %s [-HNLR] -adefi [pkg ...]\n"
-	    "       %s [-NLR] -l files|mdeps|rdeps [pkg ...]\n"
+	    "usage: %s [-HLNR] -adefi [pkg ...]\n"
+	    "       %s [-LNR] -l files|mdeps|rdeps [pkg ...]\n"
 	    "       %s -u\n",
 	    c_std_getprogname(), c_std_getprogname(), c_std_getprogname());
 	c_std_exit(1);
@@ -371,136 +401,90 @@ int
 venus_main(int argc, char **argv)
 {
 	struct package pkg;
-	ctype_fd fd;
 	ctype_ioq ioq;
-	int (*fn)(struct package *);
-	int rv;
-	char *db, *tdb, *tmp;
+	ctype_arr arr;
+	ctype_fd fd;
+	int (*func)(struct package *);
+	int r;
+	char *tmp;
+	char *db, *dbflag;
 	char buf[C_BIOSIZ];
 
 	c_std_setprogname(argv[0]);
-	tdb = nil;
-	fn = nil;
+
+	dbflag = nil;
 
 	C_ARGBEGIN {
 	case 'H':
-		hardreg = 1;
-		break;
-	case 'N':
-		tdb = "";
+		regmode = 1;
 		break;
 	case 'L':
-		tdb = LOCALDB;
+		dbflag = LOCALDB;
+		break;
+	case 'N':
+		dbflag = "";
 		break;
 	case 'R':
-		tdb = REMOTEDB;
+		dbflag = REMOTEDB;
 		break;
 	case 'a':
 		db = REMOTEDB;
-		fn = pkginstall;
+		func = &pkgadd;
 		break;
 	case 'd':
 		db = LOCALDB;
-		fn = pkgdel;
+		func = &pkgdel;
 		break;
 	case 'e':
 		db = REMOTEDB;
-		fn = pkgexplode;
+		func = &pkgexplode;
 		break;
 	case 'f':
 		db = REMOTEDB;
-		fn = pkgfetch;
+		func = &pkgfetch;
 		break;
 	case 'i':
 		db = LOCALDB;
-		fn = pkginfo;
+		func = &pkginfo;
 		break;
 	case 'l':
-		db = LOCALDB;
 		tmp = C_EARGF(usage());
-		if (!c_mem_cmp("files", sizeof("files"), tmp))
-			fn = pkglfiles;
-		else if (!c_mem_cmp("mdeps", sizeof("mdeps"), tmp))
-			fn = pkglmdeps;
-		else if (!c_mem_cmp("rdeps", sizeof("rdeps"), tmp))
-			fn = pkglrdeps;
-		else
-			usage();
+		func = LARG(tmp);
+		db = LOCALDB;
 		break;
 	case 'u':
-		fn = pkgupdate;
+		func = &pkgupdate;
 		break;
 	default:
 		usage();
 	} C_ARGEND
 
-	if ((tmp = c_sys_getenv("VENUS_ARCH")))
-		arch = tmp;
+	readenv();
+	readcfg();
+	startfd();
 
-	if ((tmp = c_sys_getenv("VENUS_EXTENSION")))
-		ext = tmp;
+	if (func == pkgupdate)
+		c_std_exit(func(nil));
+	if (dbflag)
+		db = dbflag;
 
-	if ((tmp = c_sys_getenv("VENUS_FETCH")))
-		fetch = tmp;
-
-	if ((tmp = c_sys_getenv("VENUS_ROOT")))
-		root = tmp;
-
-	if ((tmp = c_sys_getenv("VENUS_UNCOMPRESS")))
-		inflate = tmp;
-
-	if ((tmp = c_sys_getenv("VENUS_URL")))
-		url = tmp;
-
-	conf_start();
-
-	if (!fn)
-		usage();
-
-	if ((fd_cache = c_sys_open(CACHEDIR, C_OREAD, 0)) < 0)
-		c_err_die(1, "c_sys_open " CACHEDIR);
-
-	if ((fd_etc = c_sys_open(ETCDIR, C_OREAD, 0)) < 0)
-		c_err_die(1, "c_sys_open " ETCDIR);
-
-	if ((fd_remote = c_sys_open(REMOTEDB, C_OREAD, 0)) < 0)
-		c_err_die(1, "c_sys_open " REMOTEDB);
-
-	if ((fd_dot = c_sys_open(".", C_OREAD, 0)) < 0)
-		c_err_die(1, "c_sys_open <dot>");
-
-	if (fn == pkgupdate)
-		c_std_exit(fn(nil));
-
-	if ((fd_chksum = c_sys_open(CHKSUMFILE, C_OREAD, 0)) < 0)
-		c_err_die(1, "c_sys_open " CHKSUMFILE);
-
-	if ((fd_root = c_sys_open(root, C_OREAD, 0)) < 0)
-		c_err_die(1, "c_sys_open %s", root);
-
-	if (tdb)
-		db = tdb;
-
+	c_mem_set(&arr, sizeof(arr), 0);
 	c_mem_set(&pkg, sizeof(pkg), 0);
-	pkg.fp = &ioq;
+	pkg.p = &ioq;
+	r = 0;
 
-	for (; *argv; --argc, ++argv) {
-		tmp = concat(db, *argv);
-		if ((fd = c_sys_open(tmp, C_OREAD, 0)) < 0) {
-			rv = c_err_warn("c_sys_open %s", tmp);
+	for (; *argv; ++argv) {
+		c_arr_trunc(&arr, 0, sizeof(uchar));
+		c_dyn_fmt(&arr, "%s/%s", db, *argv);
+		if ((fd = c_sys_open(c_arr_data(&arr), ROPTS, RMODE)) < 0) {
+			r = c_err_warn("c_sys_open %s", c_arr_data(&arr));
 			continue;
 		}
-		c_ioq_init(&ioq, fd, buf, sizeof(buf), c_sys_read);
-
+		c_ioq_init(&ioq, fd, buf, sizeof(buf), &c_sys_read);
 		pkgdata(&pkg);
-		rv |= fn(&pkg);
-
-		pkgfree(&pkg);
-		pkg.tag = 0;
+		r |= func(&pkg);
 		c_sys_close(fd);
 	}
-
 	c_ioq_flush(ioq1);
-
 	return 0;
 }

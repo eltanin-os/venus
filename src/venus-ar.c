@@ -23,38 +23,45 @@ int
 ar_main(int argc, char **argv)
 {
 	int op;
-	char *f, *file;
+	char *file;
 
 	c_std_setprogname(argv[0]);
-	file = nil;
+
 	op = ZERO;
+	file = nil;
 
 	C_ARGBEGIN {
 	case 'c':
 		op = ARCHIVE;
-		f = "<stdout>";
 		break;
 	case 'f':
 		file = C_EARGF(usage());
 		break;
 	case 'x':
 		op = UNARCHIVE;
-		f = "<stdin>";
 		break;
 	default:
 		usage();
 	} C_ARGEND
 
-	if (!op)
+	switch (op) {
+	case ARCHIVE:
+		if (!file)
+			file = "<stdin>";
+
+		return archive(file, argv);
+	case UNARCHIVE:
+		if (argc)
+			usage();
+
+		if (!file)
+			file = "<stdout>";
+
+		return unarchive(file);
+	default:
 		usage();
+	}
 
-	if (!file)
-		file = f;
-
-	if (op == ARCHIVE)
-		archive(file, argv);
-	else if (op == UNARCHIVE)
-		unarchive(file);
-
+	/* NOT REACHED */
 	return 0;
 }

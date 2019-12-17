@@ -6,15 +6,16 @@
 int
 main(int argc, char **argv)
 {
-	char *argv0;
+	char *s;
 
-	argv0 = c_gen_basename(sdup(*argv, c_str_len(*argv, C_USIZEMAX)));
+	c_std_setprogname(argv[0]);
+	s = c_gen_basename(c_std_getprogname());
 
-	if (!c_str_cmp(argv0, C_USIZEMAX, "venus"))
+	if (!CSTRCMP("venus", s))
 		return venus_main(argc, argv);
-	else if (!c_str_cmp(argv0, C_USIZEMAX, "venus-ar"))
+	else if (!CSTRCMP("venus-ar", s))
 		return ar_main(argc, argv);
-	else if (!c_str_cmp(argv0, C_USIZEMAX, "venus-cksum"))
+	else if (!CSTRCMP("venus-cksum", s))
 		return cksum_main(argc, argv);
 
 	return 1;

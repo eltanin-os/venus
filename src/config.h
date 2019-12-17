@@ -9,8 +9,3 @@
 #define ETCDIR "/etc"
 #define CONFIGFILE ETCDIR "/venus.conf"
 #define CHKSUMFILE ETCDIR "/" SNAME
-
-#define ARCHMAX 12
-#define EXTMAX 12
-#define URLMAX 512
-#define TOOLMAX 256

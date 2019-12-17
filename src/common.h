@@ -1,27 +1,55 @@
+#include "config.h"
+
+#define CSTRCMP(a, b) c_mem_cmp((a), sizeof((a)), (b))
 #define STRCMP(a, b) c_mem_cmp((a), sizeof((a)) - 1, (b))
 
+#define ROPTS C_OREAD
+#define RMODE 0
+#define WOPTS (C_OCREATE | C_OWRITE)
+#define WMODE C_DEFFILEMODE
+
+/* fail routines */
+static inline void
+efchdir(ctype_fd fd)
+{
+	if (c_sys_fchdir(fd) < 0)
+		c_err_die(1, "c_sys_fchdir");
+}
+
+static inline vlong
+estrtovl(char *p, int b, vlong l, vlong h)
+{
+	vlong rv;
+	int e;
+
+	rv = c_std_strtovl(p, b, l, h, nil, &e);
+	if (e < 0)
+		c_err_die(1, "c_std_strtovl %s", p);
+	return rv;
+}
+
 /* archive routines */
-int archive(char *, char **);
-int archivefd(int, char **);
-int unarchive(char *);
-int unarchivefd(int);
+ctype_status archive(char *, char **);
+ctype_status archivefd(ctype_fd, char **av);
+ctype_status unarchive(char *);
+ctype_status unarchivefd(ctype_fd);
+
+/* chksum routines */
+void chksum_whirlpool(ctype_fd, ctype_fd, char *);
+
+/* dyn routines */
+char **av1make(char *);
+char **av3make(char *, char *, char *);
+char *estrdup(char *);
+ctype_arr *getln(ctype_ioq *);
+
+/* fs routines */
+ctype_status makepath(char *);
+ctype_status removepath(char *);
 
 /* utils routines */
-char **avmake3(char *, char *, char *);
-char *concat(char *, char *);
-char *sdup(char *, uint);
-ctype_arr *getln(ctype_ioq *);
-int checksum_fletcher32(char *, char *, u64int);
-void checksum_whirlpool(ctype_fd fd, char *);
-int destroypath(char *, usize);
-int makepath(char *);
-size eioqget(ctype_ioq *, char *, usize);
-vlong estrtovl(char *, int, vlong, vlong);
-void assign(char **, char *);
-void efchdir(ctype_fd);
-void eioqgetall(ctype_ioq *, char *, usize);
 void dofetch(ctype_fd, char *);
-void uncompress(ctype_fd, ctype_fd);
+void douncompress(ctype_fd dirfd, ctype_fd);
 
 /* main routines */
 int ar_main(int, char **);
@@ -29,6 +57,5 @@ int cksum_main(int, char **);
 int venus_main(int, char **);
 
 /* global variables */
-extern int fd_dot;
 extern char *fetch;
-extern char *inflate;
+extern char *uncompress;
