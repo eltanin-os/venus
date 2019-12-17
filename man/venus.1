@@ -28,7 +28,7 @@ Set the operations to fetch and explode, and the database to remote.
 .It Fl d
 Set the operation to delete and the dabase to local.
 .It Fl e
-Set the operation to explode and the database to remote.
+Set the operations to explode and register, and the database to remote.
 .It Fl f
 Set the operation to fetch and the database to remote.
 .It Fl H
@@ -46,8 +46,21 @@ Set the database to remote.
 .It Fl u
 Set the operation to update.
 .El
+.Ss Operations
+.Bl -tag -width register
+.It explode
+Uncompress and unarchive the fetched package to the root system.
+.It delete
+Remove the package from the root system.
+.It fetch
+Fetch a package from the repository.
+.It register
+Add a package to the local database as a symbolic link of the remote entry.
+.It update
+Populate the remote database and fetch the chksum file.
+.El
 .Sh ENVIRONMENT
-.Bl -tag -width
+.Bl -tag -width VENUS_UNCOMPRESS
 .It Ev VENUS_ARCH
 Set the architecture of the system.
 .It Ev VENUS_EXTENSION
