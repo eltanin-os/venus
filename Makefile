@@ -12,6 +12,9 @@ BIN=\
 
 BINSHARED=\
 	src/ar.c\
+	src/chksum.c\
+	src/dyn.c\
+	src/fs.c\
 	src/main.c\
 	src/utils.c\
 	src/venus-ar.c\
