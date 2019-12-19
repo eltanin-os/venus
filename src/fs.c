@@ -4,23 +4,43 @@
 #include "common.h"
 
 ctype_status
+mkdir(char *s, uint mode)
+{
+	ctype_stat st;
+
+	if (c_sys_mkdir(s, mode) < 0) {
+		if (errno == C_EEXIST) {
+			if ((c_sys_stat(&st, s) < 0) || C_ISDIR(st.mode)) {
+				errno = C_ENOTDIR;
+				return -1;
+			}
+		} else {
+			return -1;
+		}
+	}
+
+	return 0;
+}
+
+ctype_status
 makepath(char *path)
 {
 	char *s;
 
-	path = estrdup(path);
 	s = path + (*path == '/');
 
 	for (;;) {
 		if (!(s = c_str_chr(s, C_USIZEMAX, '/')))
 			break;
 		*s = 0;
-		if ((c_sys_mkdir(path, 0755) < 0) &&
-		    errno != C_EEXIST)
-			return c_err_warn("c_sys_mkdir %s", path);
+		if (mkdir(path, 0755) < 0)
+			return c_err_warn("mkdir %s", path);
 		*s++ = '/';
 	}
-	c_std_free(path);
+
+	if (mkdir(path, 0755) < 0)
+		return c_err_warn("mkdir %s", path);
+
 	return 0;
 }
 
