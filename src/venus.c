@@ -285,11 +285,12 @@ pkgexplode(struct package *pkg)
 	douncompress(fd_root, fd);
 	c_sys_close(fd);
 
+	c_arr_trunc(&arr, 0, sizeof(uchar));
 	if (c_dyn_fmt(&arr, "%s/%s", REMOTEDB, c_arr_data(&pkg->name)) < 0)
 		c_err_die(1, "c_dyn_fmt");
 
 	c_mem_set(&dest, sizeof(dest), 0);
-	if (c_dyn_fmt(&dest, "%s/%s", LOCALDB, c_arr_data(&pkg->version)) < 0)
+	if (c_dyn_fmt(&dest, "%s/%s", LOCALDB, c_arr_data(&pkg->name)) < 0)
 		c_err_die(1, "c_dyn_fmt");
 
 	doregister(c_arr_data(&arr), c_arr_data(&dest));
