@@ -4,7 +4,7 @@
 #include "common.h"
 
 ctype_status
-mkdir(char *s, uint mode)
+makedir(char *s, uint mode)
 {
 	ctype_stat st;
 
@@ -33,13 +33,13 @@ makepath(char *path)
 		if (!(s = c_str_chr(s, C_USIZEMAX, '/')))
 			break;
 		*s = 0;
-		if (mkdir(path, 0755) < 0)
-			return c_err_warn("mkdir %s", path);
+		if (makedir(path, 0755) < 0)
+			return c_err_warn("makedir %s", path);
 		*s++ = '/';
 	}
 
-	if (mkdir(path, 0755) < 0)
-		return c_err_warn("mkdir %s", path);
+	if (makedir(path, 0755) < 0)
+		return c_err_warn("makedir %s", path);
 
 	return 0;
 }
