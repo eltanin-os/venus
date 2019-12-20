@@ -10,7 +10,7 @@ makedir(char *s, uint mode)
 
 	if (c_sys_mkdir(s, mode) < 0) {
 		if (errno == C_EEXIST) {
-			if ((c_sys_stat(&st, s) < 0) || C_ISDIR(st.mode)) {
+			if ((c_sys_stat(&st, s) < 0) || !C_ISDIR(st.mode)) {
 				errno = C_ENOTDIR;
 				return -1;
 			}
