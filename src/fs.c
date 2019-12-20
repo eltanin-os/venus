@@ -28,7 +28,6 @@ makepath(char *path)
 	char *s;
 
 	s = path + (*path == '/');
-
 	for (;;) {
 		if (!(s = c_str_chr(s, C_USIZEMAX, '/')))
 			break;
@@ -37,10 +36,6 @@ makepath(char *path)
 			return c_err_warn("makedir %s", path);
 		*s++ = '/';
 	}
-
-	if (makedir(path, 0755) < 0)
-		return c_err_warn("makedir %s", path);
-
 	return 0;
 }
 
