@@ -78,7 +78,7 @@ cksum_main(int argc, char **argv)
 		} else {
 			c_ioq_fmt(ioq1, "%o", *(u32int *)(uintptr)buf);
 		}
-		c_ioq_fmt(ioq1, " %o", c_hsh_len(&hs));
+		c_ioq_fmt(ioq1, " %o\n", c_hsh_len(&hs));
 	}
 
 	c_ioq_flush(ioq1);
