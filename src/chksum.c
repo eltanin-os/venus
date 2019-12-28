@@ -44,6 +44,7 @@ chksum_whirlpool(ctype_fd dirfd, ctype_fd etcfd, char *file)
 
 	efchdir(dirfd);
 	c_ioq_init(&ioq, etcfd, buf, sizeof(buf), &c_sys_read);
+	c_sys_seek(etcfd, 0, C_SEEKSET);
 	check = 0;
 	while ((ap = getln(&ioq))) {
 		n = c_arr_bytes(ap);
