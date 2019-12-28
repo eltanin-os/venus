@@ -19,12 +19,13 @@ enum {
 
 struct package {
 	ctype_ioq *p;
-	int tag;
 	ctype_arr name;
 	ctype_arr version;
 	ctype_arr license;
 	ctype_arr description;
 	ctype_arr size;
+	int tag;
+	char *path;
 };
 
 /* path fd */
@@ -228,24 +229,15 @@ writepkglist(struct package *pkg, char *strtag, usize n, int tag)
 static int
 pkgdel(struct package *pkg)
 {
-	ctype_arr arr;
 	int r;
 	char *s;
 
-	efchdir(fd_root);
 	r = 0;
-	while ((s = pkglist(pkg, "files:", sizeof("files:"), FILETAG))) {
-		c_arr_trunc(&arr, 0, sizeof(uchar));
-		if (c_dyn_fmt(&arr, "%s/%s", root, pkg) < 0)
-			c_err_die(1, "c_dyn_fmt");
+	efchdir(fd_root);
+	while ((s = pkglist(pkg, "files:", sizeof("files:"), FILETAG)))
 		r |= removepath(s);
-	}
 
-	c_arr_trunc(&arr, 0, sizeof(uchar));
-	if (c_dyn_fmt(&arr, "%s/%s", LOCALDB, c_arr_data(&pkg->name)) < 0)
-		c_err_die(1, "c_dyn_fmt");
-	c_sys_unlink(c_arr_data(&arr));
-	c_dyn_free(&arr);
+	c_sys_unlink(pkg->path);
 	return r;
 }
 
@@ -270,7 +262,7 @@ doregister(char *src, char *dest)
 static int
 pkgexplode(struct package *pkg)
 {
-	ctype_arr arr, dest;
+	ctype_arr arr;
 	ctype_fd fd;
 
 	c_mem_set(&arr, sizeof(arr), 0);
@@ -286,16 +278,11 @@ pkgexplode(struct package *pkg)
 	c_sys_close(fd);
 
 	c_arr_trunc(&arr, 0, sizeof(uchar));
-	if (c_dyn_fmt(&arr, "%s/%s", REMOTEDB, c_arr_data(&pkg->name)) < 0)
+	if (c_dyn_fmt(&arr, "%s/%s", LOCALDB, c_arr_data(&pkg->name)) < 0)
 		c_err_die(1, "c_dyn_fmt");
 
-	c_mem_set(&dest, sizeof(dest), 0);
-	if (c_dyn_fmt(&dest, "%s/%s", LOCALDB, c_arr_data(&pkg->name)) < 0)
-		c_err_die(1, "c_dyn_fmt");
-
-	doregister(c_arr_data(&arr), c_arr_data(&dest));
+	doregister(pkg->path, c_arr_data(&arr));
 	c_dyn_free(&arr);
-	c_dyn_free(&dest);
 	return 0;
 }
 
@@ -476,9 +463,11 @@ venus_main(int argc, char **argv)
 
 	for (; *argv; ++argv) {
 		c_arr_trunc(&arr, 0, sizeof(uchar));
-		c_dyn_fmt(&arr, "%s/%s", db, *argv);
-		if ((fd = c_sys_open(c_arr_data(&arr), ROPTS, RMODE)) < 0) {
-			r = c_err_warn("c_sys_open %s", c_arr_data(&arr));
+		if (c_dyn_fmt(&arr, "%s/%s", db, *argv) < 0)
+			c_err_die(1, "c_dyn_fmt");
+		pkg.path = c_arr_data(&arr);
+		if ((fd = c_sys_open(pkg.path, ROPTS, RMODE)) < 0) {
+			r = c_err_warn("c_sys_open %s", pkg.path);
 			continue;
 		}
 		c_ioq_init(&ioq, fd, buf, sizeof(buf), &c_sys_read);

@@ -51,11 +51,13 @@ Set the operation to update.
 .It explode
 Uncompress and unarchive the fetched package to the root system.
 .It delete
-Remove the package from the root system.
+Remove all the package files from the root system and its entry from the
+set database.
 .It fetch
 Fetch a package from the repository.
 .It register
-Add a package to the local database as a symbolic link of the remote entry.
+Add an entry, as a symbolic link, from the set database to
+the local one.
 .It update
 Populate the remote database and fetch the chksum file.
 .El
