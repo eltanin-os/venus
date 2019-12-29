@@ -1,4 +1,4 @@
-.Dd December 17, 2019
+.Dd $Mdocdate: December 29 2019 $
 .Dt VENUS-AR 5
 .Os
 .Sh NAME
@@ -12,7 +12,7 @@ archive format join several files, of any type, into one.
 A
 .Nm
 archive consists of a ASCII file identifier
-.Sq 3C47B1F3 ,
+.Sq 3EA81233 ,
 and files, each one with its own header.
 .Pp
 The headers for a
@@ -20,13 +20,12 @@ The headers for a
 archive consists of the following:
 .Bd -literal -offset indent
 struct header {
-	char mode[8];
-	char namesize[8];
-	char size[24];
+	u32int mode;
+	u32int namesize;
+	u64int size;
 };
 .Ed
 .Pp
-All unused bytes in the header are filled with null characters
-.Pq Sq \0 .
+The numbers are stored in low endian form.
 .Sh SEE ALSO
 .Xr venus-ar 1
