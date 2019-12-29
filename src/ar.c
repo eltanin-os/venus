@@ -3,13 +3,7 @@
 
 #include "common.h"
 
-#define MAGIC "3C47B1F3"
-
-struct strheader {
-	char mode[8];
-	char namesize[8];
-	char size[24];
-};
+#define MAGIC "3EA81233"
 
 struct header {
 	u32int mode;
@@ -18,13 +12,19 @@ struct header {
 };
 
 static void
-putoctal(ctype_ioq *p, u64int x, int n)
+store32(ctype_ioq *p, u32int x)
 {
-	char buf[24];
+	char tmp[4];
 
-	c_mem_set(buf, sizeof(buf), 0);
-	n -= c_ioq_fmt(p, "%.*lluo", n, x);
-	c_ioq_nput(p, buf, n);
+	c_ioq_nput(p, c_uint_32pack(tmp, x), sizeof(x));
+}
+
+static void
+store64(ctype_ioq *p, u64int x)
+{
+	char tmp[8];
+
+	c_ioq_nput(p, c_uint_64pack(tmp, x), sizeof(x));
 }
 
 ctype_status
@@ -54,9 +54,9 @@ archivefd(ctype_fd afd, char **av)
 		case C_FSDEF:
 			continue;
 		}
-		putoctal(&ioq, p->stp->mode, 8);
-		putoctal(&ioq, p->len, 8);
-		putoctal(&ioq, p->stp->size, 24);
+		store32(&ioq, p->stp->mode);
+		store32(&ioq, p->len);
+		store64(&ioq, p->stp->size);
 		c_ioq_nput(&ioq, p->path, p->len);
 		switch (p->info) {
 		case C_FSF:
@@ -106,16 +106,6 @@ getall(ctype_ioq *p, char *s, usize n)
 		c_err_diex(1, "file incomplete");
 }
 
-static char *
-sdup(char *s, int n)
-{
-	static char buf[25];
-
-	c_mem_cpy(buf, n, s);
-	buf[n] = 0;
-	return buf;
-}
-
 ctype_status
 unarchivefd(ctype_fd afd)
 {
@@ -127,7 +117,7 @@ unarchivefd(ctype_fd afd)
 	size r;
 	char *s;
 	char buf[C_BIOSIZ];
-	char hbuf[40];
+	char hbuf[16];
 
 	c_ioq_init(&ioq, afd, buf, sizeof(buf), &c_sys_read);
 	getall(&ioq, hbuf, sizeof(MAGIC) - 1);
@@ -141,12 +131,12 @@ unarchivefd(ctype_fd afd)
 			break;
 
 		getall(&ioq, hbuf, sizeof(hbuf));
-		s = sdup(p->mode, sizeof(p->mode));
-		h.mode = estrtovl(s, 8, 0, 0777777);
-		s = sdup(p->namesize, sizeof(p->namesize));
-		h.namesize = estrtovl(s, 8, 0, C_UINTMAX);
-		s = sdup(p->size, sizeof(p->size));
-		h.size = estrtovl(s, 8, 0, C_VLONGMAX);
+		s = hbuf;
+		h.mode = c_uint_32unpack(s);
+		s += sizeof(h.mode);
+		h.namesize = c_uint_32unpack(s);
+		s += sizeof(h.namesize);
+		h.size = c_uint_32unpack(s);
 
 		c_arr_trunc(&arr, 0, sizeof(uchar));
 		if (c_dyn_ready(&arr, h.namesize, sizeof(uchar)) < 0)
