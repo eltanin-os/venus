@@ -136,7 +136,7 @@ unarchivefd(ctype_fd afd)
 		s += sizeof(h.mode);
 		h.namesize = c_uint_32unpack(s);
 		s += sizeof(h.namesize);
-		h.size = c_uint_32unpack(s);
+		h.size = c_uint_64unpack(s);
 
 		c_arr_trunc(&arr, 0, sizeof(uchar));
 		if (c_dyn_ready(&arr, h.namesize, sizeof(uchar)) < 0)
