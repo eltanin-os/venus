@@ -1,6 +1,7 @@
+#define LOCALDB "/var/pkg/local/"
+#define REMOTEDB "/var/pkg/remote/"
+
 #define CACHEDIR "/var/pkg/cache"
-#define LOCALDB "/var/pkg/local"
-#define REMOTEDB "/var/pkg/remote"
 #define LOCALCONF ".config/venus.conf"
 
 #define RDBNAME "remote.vlz"

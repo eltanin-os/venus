@@ -1,4 +1,4 @@
-.Dd $Mdocdate: December 29 2019 $
+.Dd $Mdocdate: December 30 2019 $
 .Dt VENUS 1
 .Os
 .Sh NAME
@@ -32,7 +32,7 @@ Set the operations to explode and register, and the database to remote.
 .It Fl f
 Set the operation to fetch and the database to remote.
 .It Fl H
-Set the register operation as copy.
+Set the register operation to copy.
 .It Fl i
 Set the operation to info and the database to local.
 .It Fl L
@@ -40,7 +40,7 @@ Set the database to local.
 .It Fl l
 Set the operation to list and the database to local.
 .It Fl N
-Set the database to null.
+Set the database to null, and the register operation to copy.
 .It Fl R
 Set the database to remote.
 .It Fl u
@@ -60,21 +60,6 @@ Add an entry, as a symbolic link, from the set database to
 the local one.
 .It update
 Populate the remote database and fetch the chksum file.
-.El
-.Sh ENVIRONMENT
-.Bl -tag -width VENUS_UNCOMPRESS
-.It Ev VENUS_ARCH
-Set the architecture of the system.
-.It Ev VENUS_EXTENSION
-Set the extension used by the compressor.
-.It Ev VENUS_FETCH
-Set the tool used to fetch the packages.
-.It Ev VENUS_ROOT
-Set the location where the packages are going to be installed.
-.It Ev VENUS_UNCOMPRESS
-Set the tool used to uncompress the packages.
-.It Ev VENUS_URL
-Set the repository url.
 .El
 .Sh FILES
 .Bl -tag -width XXXXXXXXXXXXXXXXXXXXXXXX -compat

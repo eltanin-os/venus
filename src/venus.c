@@ -3,6 +3,8 @@
 
 #include "common.h"
 
+#define CMP(a, b, c) (!(a) && !CSTRCMP((b), (c)))
+
 #define LARG(a) \
 (!CSTRCMP("files", (a)) ? &pkglfiles  :\
  (!CSTRCMP("mdeps", (a)) ? &pkglmdeps :\
@@ -30,6 +32,7 @@ struct package {
 
 /* path fd */
 ctype_fd fd_cache;
+ctype_fd fd_dot;
 ctype_fd fd_etc;
 ctype_fd fd_remote;
 ctype_fd fd_root;
@@ -81,17 +84,17 @@ readcfg(void)
 		if (!(s = c_str_chr(s, C_USIZEMAX, '=')))
 			continue;
 		*s++ = 0;
-		if (!arch && !CSTRCMP("arch", c_arr_data(ap)))
+		if (CMP(arch, "arch", c_arr_data(ap)))
 			arch = estrdup(s);
-		else if (!extension && !CSTRCMP("extension", c_arr_data(ap)))
+		else if (CMP(extension, "extension", c_arr_data(ap)))
 			extension = estrdup(s);
-		else if (!fetch && !CSTRCMP("fetch", c_arr_data(ap)))
+		else if (CMP(fetch, "fetch", c_arr_data(ap)))
 			fetch = estrdup(s);
-		else if (!root && !CSTRCMP("root", c_arr_data(ap)))
+		else if (CMP(root, "root", c_arr_data(ap)))
 			root = estrdup(s);
-		else if (!uncompress && !CSTRCMP("uncompress", c_arr_data(ap)))
+		else if (CMP(uncompress, "uncompress", c_arr_data(ap)))
 			uncompress = estrdup(s);
-		else if (!url && !CSTRCMP("url", c_arr_data(ap)))
+		else if (CMP(url, "url", c_arr_data(ap)))
 			url = estrdup(s);
 
 	}
@@ -99,29 +102,12 @@ readcfg(void)
 }
 
 static void
-readenv(void)
-{
-	char *tmp;
-
-	if ((tmp = c_sys_getenv("VENUS_ARCH")))
-		arch = tmp;
-	if ((tmp = c_sys_getenv("VENUS_EXTENSION")))
-		extension = tmp;
-	if ((tmp = c_sys_getenv("VENUS_FETCH")))
-		fetch = tmp;
-	if ((tmp = c_sys_getenv("VENUS_ROOT")))
-		root = tmp;
-	if ((tmp = c_sys_getenv("VENUS_UNCOMPRESS")))
-		uncompress = tmp;
-	if ((tmp = c_sys_getenv("VENUS_URL")))
-		url = tmp;
-}
-
-static void
 startfd(void)
 {
 	if ((fd_cache = c_sys_open(CACHEDIR, ROPTS, RMODE)) < 0)
 		c_err_die(1, "c_sys_open " CACHEDIR);
+	if ((fd_dot = c_sys_open(".", ROPTS, RMODE)) < 0)
+		c_err_die(1, "c_sys_open <dot>");
 	if ((fd_chksum = c_sys_open(CHKSUMFILE, ROPTS, RMODE)) < 0)
 		c_err_die(1, "c_sys_open " CHKSUMFILE);
 	if ((fd_etc = c_sys_open(ETCDIR, ROPTS, RMODE)) < 0)
@@ -237,6 +223,7 @@ pkgdel(struct package *pkg)
 	while ((s = pkglist(pkg, "files:", sizeof("files:"), FILETAG)))
 		r |= removepath(s);
 
+	efchdir(fd_dot);
 	c_sys_unlink(pkg->path);
 	return r;
 }
@@ -281,6 +268,7 @@ pkgexplode(struct package *pkg)
 	if (c_dyn_fmt(&arr, "%s/%s", LOCALDB, c_arr_data(&pkg->name)) < 0)
 		c_err_die(1, "c_dyn_fmt");
 
+	efchdir(fd_dot);
 	doregister(pkg->path, c_arr_data(&arr));
 	c_dyn_free(&arr);
 	return 0;
@@ -411,6 +399,7 @@ venus_main(int argc, char **argv)
 		break;
 	case 'N':
 		dbflag = "";
+		regmode = 1;
 		break;
 	case 'R':
 		dbflag = REMOTEDB;
@@ -447,7 +436,6 @@ venus_main(int argc, char **argv)
 		usage();
 	} C_ARGEND
 
-	readenv();
 	readcfg();
 	startfd();
 
@@ -463,7 +451,7 @@ venus_main(int argc, char **argv)
 
 	for (; *argv; ++argv) {
 		c_arr_trunc(&arr, 0, sizeof(uchar));
-		if (c_dyn_fmt(&arr, "%s/%s", db, *argv) < 0)
+		if (c_dyn_fmt(&arr, "%s%s", db, *argv) < 0)
 			c_err_die(1, "c_dyn_fmt");
 		pkg.path = c_arr_data(&arr);
 		if ((fd = c_sys_open(pkg.path, ROPTS, RMODE)) < 0) {
