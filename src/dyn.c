@@ -55,12 +55,11 @@ av1make(char *s)
 char *
 estrdup(char *s)
 {
-	ctype_arr arr;
+	char *p;
 
-	c_mem_set(&arr, sizeof(arr), 0);
-	if (c_dyn_fmt(&arr, "%s", s) < 0)
-		c_err_die(1, "c_dyn_fmt");
-	return c_arr_data(&arr);
+	if (!(p = c_str_dup(s, C_USIZEMAX)))
+		c_err_die(1, "c_str_dup");
+	return p;
 }
 
 ctype_arr *
