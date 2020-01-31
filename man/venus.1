@@ -7,7 +7,7 @@
 .Sh SYNOPSIS
 .Nm
 .Op Fl HNLR
-.Fl adefi
+.Fl acdefi
 .Ar pkg ...
 .Nm
 .Op Fl NLR
@@ -25,8 +25,10 @@ utility executes the set operation to each
 .Bl -tag -width Ds
 .It Fl a
 Set the operations to fetch and explode, and the database to remote.
+.It Fl c
+Set the operation to check, and the database to local.
 .It Fl d
-Set the operation to delete and the dabase to local.
+Set the operation to delete and the database to local.
 .It Fl e
 Set the operations to explode and register, and the database to remote.
 .It Fl f
@@ -48,6 +50,8 @@ Set the operation to update.
 .El
 .Ss Operations
 .Bl -tag -width register
+.It check
+Check all the package files and report any corrupted file.
 .It explode
 Uncompress and unarchive the fetched package to the root system.
 .It delete

@@ -1,4 +1,4 @@
-.Dd $Mdocdate: December 29 2019 $
+.Dd $Mdocdate: January 29 2020 $
 .Dt VENUS-PKGDESC 5
 .Os
 .Sh NAME
@@ -11,12 +11,13 @@ file contains information to describe a package.
 .Pp
 Single value variables are declared as
 .Pp
-.Dl # variable: value
+.Dl variable:value
 .Pp
 Multiple value variables are declared as
 .Bd -literal -offset indent
-variable:
+variable{
 	value
+}
 .Ed
 .Pp
 The single value variables are:
@@ -30,7 +31,7 @@ The license of the package.
 .It description
 A one-line description of the package.
 .It size
-The size of the package when installed, in bytes
+The total size of the package when installed, in bytes
 .Pq octal .
 .El
 .Pp
@@ -58,10 +59,10 @@ name#version- (the specified version or lower)
 .Pp
 The files values must be declared as
 .Pp
-.Dl	name checksum size
+.Dl	name checksum
 .Pp
-The name field must be a relative path, the checksum and size fields must
-be in octal format, and the size must be given in bytes.
+The name field must be a relative path, and the checksum field must
+be in hexadecimal format.
 .Pp
 The fields of multiple value variables must be declared one per line,
 started by a tabulation character

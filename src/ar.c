@@ -109,7 +109,6 @@ getall(ctype_ioq *p, char *s, usize n)
 ctype_status
 unarchivefd(ctype_fd afd)
 {
-	struct strheader *p;
 	struct header h;
 	ctype_arr arr;
 	ctype_ioq ioq;
@@ -125,7 +124,6 @@ unarchivefd(ctype_fd afd)
 		c_err_diex(1, "unknown format");
 
 	c_mem_set(&arr, sizeof(arr), 0);
-	p = (void *)hbuf;
 	for (;;) {
 		if (!c_ioq_feed(&ioq))
 			break;

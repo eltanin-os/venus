@@ -3,26 +3,23 @@
 
 #include "common.h"
 
+static char *tmpav[] = { "-", nil };
+
 static int
-hlink(ctype_hst *p, ctype_hmd *md, char *s)
+putlink(ctype_hst *h, ctype_hmd *md, char *s, size n)
 {
-	ctype_arr arr;
-	ctype_stat st;
+	static ctype_arr arr; /* IRS */
 	size r;
 
-	if (c_sys_lstat(&st, s) < 0 || !C_ISLNK(st.mode))
-		return 0;
-
-	c_mem_set(&arr, sizeof(arr), 0);
-	if (c_dyn_ready(&arr, st.size, sizeof(uchar)) < 0)
+	c_arr_trunc(&arr, 0, sizeof(uchar));
+	if (c_dyn_ready(&arr, n, sizeof(uchar)) < 0)
 		c_err_die(1, "c_dyn_ready");
 
-	if ((r = c_sys_readlink(c_arr_data(&arr), st.size, s)) < 0)
-		c_err_die(1, "c_sys_readlink %s", s);
+	if ((r = c_sys_readlink(c_arr_data(&arr), n, s)) < 0)
+		return c_err_warn("c_sys_readlink %s", s);
 
-	c_hsh_all(p, md, c_arr_data(&arr), r);
-	c_dyn_free(&arr);
-	return 1;
+	c_hsh_all(h, md, c_arr_data(&arr), n);
+	return 0;
 }
 
 static void
@@ -35,11 +32,13 @@ usage(void)
 int
 cksum_main(int argc, char **argv)
 {
-	ctype_hst hs;
+	ctype_hst h;
 	ctype_hmd *md;
+	ctype_stat st;
 	int i, r;
 	char buf[C_HWHIRLPOOL_DIGEST];
-	char tmp[2];
+
+	c_std_setprogname(argv[0]);
 
 	md = c_hsh_fletcher32;
 
@@ -51,36 +50,43 @@ cksum_main(int argc, char **argv)
 		usage();
 	} C_ARGEND
 
-	if (!argc) {
-		tmp[0] = '-';
-		tmp[1] = '\0';
-		*argv = tmp;
-	}
+	if (!argc)
+		argv = tmpav;
 
 	r = 0;
-
 	for (; *argv; ++argv) {
-		if (hlink(&hs, md, *argv)) {
-			;
+		md->init(&h);
+		if (C_ISDASH(*argv)) {
+			*argv = "<stdin>";
+			if (c_hsh_putfile(&h, md, *argv) < 0) {
+				r = c_err_warnx("c_hsh_putfile %s", *argv);
+				continue;
+			}
 		} else {
-			if (C_ISDASH(*argv))
-				*argv = "<stdin>";
-			if (c_hsh_putfile(&hs, md, *argv)) {
-				r = c_err_warn("c_hsh_putfile %s", *argv);
+			if (c_sys_lstat(&st, *argv) < 0) {
+				r = c_err_warnx("c_sys_lstat %s", *argv);
+				continue;
+			}
+			if (C_ISLNK(st.mode)) {
+				if (putlink(&h, md, *argv, st.size) < 0)
+					continue;
+			} else if (c_hsh_putfile(&h, md, *argv) < 0) {
+				r = c_err_warnx("c_hsh_putfile %s", *argv);
 				continue;
 			}
 		}
-		c_hsh_digest(&hs, md, buf);
+		putsize(&h, md);
+		md->end(&h);
+		c_hsh_digest(&h, md, buf);
 		c_ioq_fmt(ioq1, "%s ", *argv);
-		if (md == c_hsh_whirlpool) {
+		if (md == c_hsh_fletcher32) {
+			c_ioq_fmt(ioq1, "%x", c_uint_32unpack(buf));
+		} else {
 			for (i = 0; i < C_HWHIRLPOOL_DIGEST; ++i)
 				c_ioq_fmt(ioq1, "%02x", (uchar)buf[i]);
-		} else {
-			c_ioq_fmt(ioq1, "%o", *(u32int *)(uintptr)buf);
 		}
-		c_ioq_fmt(ioq1, " %o\n", c_hsh_len(&hs));
+		c_ioq_put(ioq1, "\n");
 	}
-
 	c_ioq_flush(ioq1);
 	return r;
 }

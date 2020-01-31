@@ -35,12 +35,15 @@ ctype_status unarchive(char *);
 ctype_status unarchivefd(ctype_fd);
 
 /* chksum routines */
-void chksum_whirlpool(ctype_fd, ctype_fd, char *);
+void chksumetc(ctype_fd, char *);
+ctype_status chksumfile(char *, char *);
+void putsize(ctype_hst *, ctype_hmd *);
 
 /* dyn routines */
 char **av1make(char *);
 char **av3make(char *, char *, char *);
 char *estrdup(char *);
+ctype_arr *getdbln(ctype_ioq *);
 ctype_arr *getln(ctype_ioq *);
 
 /* fs routines */
@@ -48,8 +51,8 @@ ctype_status makepath(char *);
 ctype_status removepath(char *);
 
 /* utils routines */
-void dofetch(ctype_fd, char *);
-void douncompress(ctype_fd dirfd, ctype_fd);
+void dofetch(char *);
+void douncompress(ctype_fd);
 
 /* main routines */
 int ar_main(int, char **);

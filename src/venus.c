@@ -60,7 +60,7 @@ readcfg(void)
 	char buf[C_BIOSIZ];
 	char *s;
 
-	if ((s = c_sys_getenv("HOME"))) {
+	if ((s = c_std_getenv("HOME"))) {
 		c_mem_set(&arr, sizeof(arr), 0);
 		if (c_dyn_fmt(&arr, "%s/%s", s, LOCALCONF) < 0)
 			c_err_die(1, "c_dyn_fmt");
@@ -81,7 +81,7 @@ readcfg(void)
 		s = c_arr_data(ap);
 		if (*s == '#')
 			continue;
-		if (!(s = c_str_chr(s, C_USIZEMAX, '=')))
+		if (!(s = c_str_chr(s, C_USIZEMAX, ':')))
 			continue;
 		*s++ = 0;
 		if (CMP(arch, "arch", c_arr_data(ap)))
@@ -96,7 +96,6 @@ readcfg(void)
 			uncompress = estrdup(s);
 		else if (CMP(url, "url", c_arr_data(ap)))
 			url = estrdup(s);
-
 	}
 	c_sys_close(fd);
 }
@@ -131,15 +130,12 @@ pkgdata(struct package *pkg)
 	c_arr_trunc(&pkg->description, 0, sizeof(uchar));
 	c_arr_trunc(&pkg->size, 0, sizeof(uchar));
 
-	while ((ap = getln(pkg->p))) {
+	while ((ap = getdbln(pkg->p))) {
 		s = c_arr_data(ap);
-		if (!(p = c_str_chr(s, C_USIZEMAX, ':')))
-			continue;
-		*p = 0;
-
-		p += 2; /*:<blank>*/
-		s += 2; /*#<blank>*/
-
+		if (!(p = c_mem_chr(s, c_arr_bytes(ap), ':')))
+			break;
+		*p++ = 0;
+		target = nil;
 		if (!CSTRCMP("name", s))
 			target = &pkg->name;
 		else if (!CSTRCMP("version", s))
@@ -150,13 +146,11 @@ pkgdata(struct package *pkg)
 			target = &pkg->description;
 		else if (!CSTRCMP("size", s))
 			target = &pkg->size;
-		else
-			continue;
 
-		c_dyn_fmt(target, "%s", p);
-		s = c_ioq_peek(pkg->p);
-		if (*s != '#')
-			break;
+		if (target)
+			c_dyn_fmt(target, "%s", p);
+
+		c_arr_trunc(ap, 0, sizeof(uchar));
 	}
 }
 
@@ -166,18 +160,27 @@ pkgtag(struct package *pkg, char *strtag, usize n, int tag)
 	ctype_arr *ap;
 	char *s;
 
-	while ((ap = getln(pkg->p))) {
+	while (pkg->tag == NOTAG) {
+		if (!(ap = getdbln(pkg->p)))
+			goto cleantag;
 		s = c_arr_data(ap);
-		if (pkg->tag == NOTAG) {
-			if (!c_mem_cmp(strtag, n, s))
-				pkg->tag = tag;
+		if (c_mem_cmp(strtag, n, s)) {
+			c_arr_trunc(ap, 0, sizeof(uchar));
 			continue;
 		}
-		if (*s != '\t')
-			break;
-		return ++s;
+		pkg->tag = tag;
 	}
-
+	ap = getdbln(pkg->p);
+	c_arr_trunc(ap, 0, sizeof(uchar));
+	if (!(ap = getdbln(pkg->p)))
+		goto cleantag;
+	s = c_arr_data(ap);
+	if (*s == '}')
+		goto cleantag;
+	if (*s != '\t')
+		c_err_diex(1, "%s: malformed database file", pkg->path);
+	return ++s;
+cleantag:
 	pkg->tag = NOTAG;
 	return nil;
 }
@@ -213,6 +216,24 @@ writepkglist(struct package *pkg, char *strtag, usize n, int tag)
 
 /* pkg routines */
 static int
+pkgcheck(struct package *pkg)
+{
+	int r;
+	char *p, *s;
+
+	r = 0;
+	efchdir(fd_root);
+	while ((s = pkgtag(pkg, "files{", sizeof("files{"), FILETAG))) {
+		if (!(p = c_str_chr(s, C_USIZEMAX, ' ')))
+			c_err_diex(1, "%s: malformed database file", pkg->path);
+		*p++ = 0;
+		if (chksumfile(s, p) < 0)
+			r = c_err_warnx("%s: checksum mismatch", s);
+	}
+	return r;
+}
+
+static int
 pkgdel(struct package *pkg)
 {
 	int r;
@@ -220,7 +241,7 @@ pkgdel(struct package *pkg)
 
 	r = 0;
 	efchdir(fd_root);
-	while ((s = pkglist(pkg, "files:", sizeof("files:"), FILETAG)))
+	while ((s = pkglist(pkg, "files{", sizeof("files{"), FILETAG)))
 		r |= removepath(s);
 
 	efchdir(fd_dot);
@@ -261,7 +282,8 @@ pkgexplode(struct package *pkg)
 	if ((fd = c_sys_open(c_arr_data(&arr), ROPTS, RMODE)) < 0)
 		c_err_die(1, "c_sys_open %s", c_arr_data(&arr));
 
-	douncompress(fd_root, fd);
+	efchdir(fd_root);
+	douncompress(fd);
 	c_sys_close(fd);
 
 	c_arr_trunc(&arr, 0, sizeof(uchar));
@@ -285,8 +307,9 @@ pkgfetch(struct package *pkg)
 	    c_arr_data(&pkg->version), extension) < 0)
 		c_err_die(1, "c_dyn_fmt");
 
-	dofetch(fd_cache, c_arr_data(&arr));
-	chksum_whirlpool(fd_cache, fd_chksum, c_gen_basename(c_arr_data(&arr)));
+	efchdir(fd_cache);
+	dofetch(c_arr_data(&arr));
+	chksumetc(fd_chksum, c_gen_basename(c_arr_data(&arr)));
 	c_dyn_free(&arr);
 	return 0;
 }
@@ -315,19 +338,19 @@ pkginfo(struct package *pkg)
 static int
 pkglfiles(struct package *pkg)
 {
-	return writepkglist(pkg, "files:", sizeof("files:"), MDEPTAG);
+	return writepkglist(pkg, "files{", sizeof("files{"), MDEPTAG);
 }
 
 static int
 pkglmdeps(struct package *pkg)
 {
-	return writepkglist(pkg, "mdeps:", sizeof("mdeps:"), MDEPTAG);
+	return writepkglist(pkg, "makedeps{", sizeof("makedeps{"), MDEPTAG);
 }
 
 static int
 pkglrdeps(struct package *pkg)
 {
-	return writepkglist(pkg, "rdeps:", sizeof("rdeps:"), RDEPTAG);
+	return writepkglist(pkg, "rdeps{", sizeof("rdeps{"), RDEPTAG);
 }
 
 static int
@@ -341,7 +364,8 @@ pkgupdate(struct package *pkg)
 	if (c_dyn_fmt(&arr, "%s/%s/%s", url, arch, RDBNAME) < 0)
 		c_err_die(1, "c_dyn_fmt");
 
-	dofetch(fd_cache, c_arr_data(&arr));
+	efchdir(fd_cache);
+	dofetch(c_arr_data(&arr));
 
 	c_arr_trunc(&arr, 0, sizeof(uchar));
 	if (c_dyn_fmt(&arr, "%s/%s", CACHEDIR, RDBNAME) < 0)
@@ -350,14 +374,16 @@ pkgupdate(struct package *pkg)
 	if ((fd = c_sys_open(c_arr_data(&arr), ROPTS, RMODE)) < 0)
 		c_err_die(1, "c_sys_open %s", c_arr_data(&arr));
 
-	douncompress(fd_remote, fd);
+	efchdir(fd_remote);
+	douncompress(fd);
 	c_sys_close(fd);
 
 	c_arr_trunc(&arr, 0, sizeof(uchar));
 	if (c_dyn_fmt(&arr, "%s/%s/%s", url, arch, SNAME) < 0)
 		c_err_die(1, "c_dyn_fmt");
 
-	dofetch(fd_etc, c_arr_data(&arr));
+	efchdir(fd_etc);
+	dofetch(c_arr_data(&arr));
 	c_dyn_free(&arr);
 	return 0;
 }
@@ -366,7 +392,7 @@ static void
 usage(void)
 {
 	c_ioq_fmt(ioq2,
-	    "usage: %s [-HLNR] -adefi [pkg ...]\n"
+	    "usage: %s [-HLNR] -acdefi [pkg ...]\n"
 	    "       %s [-LNR] -l files|mdeps|rdeps [pkg ...]\n"
 	    "       %s -u\n",
 	    c_std_getprogname(), c_std_getprogname(), c_std_getprogname());
@@ -407,6 +433,10 @@ venus_main(int argc, char **argv)
 	case 'a':
 		db = REMOTEDB;
 		func = &pkgadd;
+		break;
+	case 'c':
+		db = LOCALDB;
+		func = &pkgcheck;
 		break;
 	case 'd':
 		db = LOCALDB;

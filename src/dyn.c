@@ -62,19 +62,36 @@ estrdup(char *s)
 	return p;
 }
 
+static ctype_arr *
+getline(ctype_arr *ap, ctype_ioq *p)
+{
+	size r;
+	char *s;
+
+	if (c_arr_bytes(ap))
+		return ap;
+	if ((r = c_ioq_getln(p, ap)) < 0)
+		c_err_die(1, "c_ioq_getln");
+	if (!r)
+		return nil;
+	s = c_arr_data(ap);
+	s[c_arr_bytes(ap) - 1] = 0;
+	return ap;
+}
+
+ctype_arr *
+getdbln(ctype_ioq *p)
+{
+	static ctype_arr arr;
+
+	return getline(&arr, p);
+}
+
 ctype_arr *
 getln(ctype_ioq *p)
 {
 	static ctype_arr arr;
-	size r;
-	char *s;
 
 	c_arr_trunc(&arr, 0, sizeof(uchar));
-	if ((r = c_ioq_getln(p, &arr)) < 0)
-		c_err_die(1, "c_ioq_getln");
-	if (!r)
-		return nil;
-	s = c_arr_data(&arr);
-	s[c_arr_bytes(&arr) - 1] = 0;
-	return &arr;
+	return getline(&arr, p);
 }

@@ -28,7 +28,7 @@ urlencode(char *url)
 }
 
 void
-dofetch(ctype_fd dirfd, char *url)
+dofetch(char *url)
 {
 	char **av;
 	char *s;
@@ -40,7 +40,6 @@ dofetch(ctype_fd dirfd, char *url)
 	case -1:
 		c_err_die(1, "c_sys_fork");
 	case 0:
-		efchdir(dirfd);
 		av = av3make(fetch, s, url);
 		c_exc_run(*av, av);
 		c_err_die(1, "c_exc_run %s", *av);
@@ -51,7 +50,7 @@ dofetch(ctype_fd dirfd, char *url)
 }
 
 void
-douncompress(ctype_fd dirfd, ctype_fd fd)
+douncompress(ctype_fd fd)
 {
 	ctype_fd fds[2];
 	char **av;
@@ -72,7 +71,6 @@ douncompress(ctype_fd dirfd, ctype_fd fd)
 		c_err_die(1, "c_exc_run %s", *av);
 	default:
 		c_sys_close(fds[1]);
-		efchdir(dirfd);
 		unarchivefd(fds[0]);
 		c_sys_close(fds[0]);
 	}
