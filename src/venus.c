@@ -40,9 +40,9 @@ ctype_fd fd_chksum;
 
 /* config */
 char *arch;
-char *extension;
 char *fetch;
 char *root;
+char *safeurl;
 char *uncompress;
 char *url;
 
@@ -86,12 +86,12 @@ readcfg(void)
 		*s++ = 0;
 		if (CMP(arch, "arch", c_arr_data(ap)))
 			arch = estrdup(s);
-		else if (CMP(extension, "extension", c_arr_data(ap)))
-			extension = estrdup(s);
 		else if (CMP(fetch, "fetch", c_arr_data(ap)))
 			fetch = estrdup(s);
 		else if (CMP(root, "root", c_arr_data(ap)))
 			root = estrdup(s);
+		else if (CMP(safeurl, "safeurl", c_arr_data(ap)))
+			safeurl = estrdup(s);
 		else if (CMP(uncompress, "uncompress", c_arr_data(ap)))
 			uncompress = estrdup(s);
 		else if (CMP(url, "url", c_arr_data(ap)))
@@ -276,7 +276,7 @@ pkgexplode(struct package *pkg)
 	c_mem_set(&arr, sizeof(arr), 0);
 	if (c_dyn_fmt(&arr, "%s/%s#%s.v%s",
 	    CACHEDIR, c_arr_data(&pkg->name),
-	    c_arr_data(&pkg->version), extension) < 0)
+	    c_arr_data(&pkg->version), EXTCOMP) < 0)
 		c_err_die(1, "c_dyn_fmt");
 
 	if ((fd = c_sys_open(c_arr_data(&arr), ROPTS, RMODE)) < 0)
@@ -304,7 +304,7 @@ pkgfetch(struct package *pkg)
 	c_mem_set(&arr, sizeof(arr), 0);
 	if (c_dyn_fmt(&arr, "%s/%s/%s#%s.v%s",
 	    url, arch, c_arr_data(&pkg->name),
-	    c_arr_data(&pkg->version), extension) < 0)
+	    c_arr_data(&pkg->version), EXTCOMP) < 0)
 		c_err_die(1, "c_dyn_fmt");
 
 	efchdir(fd_cache);
@@ -361,7 +361,7 @@ pkgupdate(struct package *pkg)
 
 	(void)pkg;
 	c_mem_set(&arr, sizeof(arr), 0);
-	if (c_dyn_fmt(&arr, "%s/%s/%s", url, arch, RDBNAME) < 0)
+	if (c_dyn_fmt(&arr, "%s/%s/%s", safeurl, arch, RDBNAME) < 0)
 		c_err_die(1, "c_dyn_fmt");
 
 	efchdir(fd_cache);
@@ -379,7 +379,7 @@ pkgupdate(struct package *pkg)
 	c_sys_close(fd);
 
 	c_arr_trunc(&arr, 0, sizeof(uchar));
-	if (c_dyn_fmt(&arr, "%s/%s/%s", url, arch, SNAME) < 0)
+	if (c_dyn_fmt(&arr, "%s/%s/%s", safeurl, arch, SNAME) < 0)
 		c_err_die(1, "c_dyn_fmt");
 
 	efchdir(fd_etc);

@@ -1,4 +1,4 @@
-.Dd $Mdocdate: December 29 2019 $
+.Dd $Mdocdate: February 01 2020 $
 .Dt VENUS-CONF 5
 .Os
 .Sh NAME
@@ -10,18 +10,18 @@ The
 file contains configuration for
 .Xr venus 1
 as a list of variable-value pairs. Each line has the format
-.Ql variable=value.
+.Ql variable:value.
 .Pp
 The following variables are supported:
 .Bl -tag -width uncompress
 .It arch
 Set the architecture of the system.
-.It extension
-Set the extension used by the compressor.
 .It fetch
 Set the tool used to fetch the packages.
 .It root
 Set the location where the packages are going to be installed.
+.It safeurl
+Set the main repository url.
 .It uncompress
 Set the tool used to uncompress the packages.
 .It url

@@ -4,7 +4,8 @@
 #define CACHEDIR "/var/pkg/cache"
 #define LOCALCONF ".config/venus.conf"
 
-#define RDBNAME "remote.vlz"
+#define EXTCOMP "lz"
+#define RDBNAME "remote.v" EXTCOMP
 #define SNAME "chksum"
 
 #define ETCDIR "/etc"
