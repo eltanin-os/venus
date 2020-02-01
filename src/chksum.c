@@ -79,6 +79,6 @@ chksumfile(char *file, char *chksum)
 
 	c_hsh_digest(&hs, c_hsh_fletcher32, buf);
 	h1 = c_uint_32unpack(buf);
-	h2 = estrtovl(chksum, 16, 0, C_UINTMAX);
+	h2 = estrtovl(chksum, 16, 0, C_UINT32MAX);
 	return h1 == h2 ? 0 : -1;
 }

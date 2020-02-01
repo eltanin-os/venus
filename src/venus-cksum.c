@@ -8,7 +8,7 @@ static char *tmpav[] = { "-", nil };
 static int
 putlink(ctype_hst *h, ctype_hmd *md, char *s, size n)
 {
-	static ctype_arr arr; /* IRS */
+	static ctype_arr arr;
 	size r;
 
 	c_arr_trunc(&arr, 0, sizeof(uchar));
