@@ -84,7 +84,7 @@ getdbln(ctype_ioq *p)
 {
 	static ctype_arr arr;
 
-	return getline(&arr, p);
+	return p ? getline(&arr, p) : &arr;
 }
 
 ctype_arr *

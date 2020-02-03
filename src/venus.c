@@ -492,6 +492,7 @@ venus_main(int argc, char **argv)
 		pkgdata(&pkg);
 		r |= func(&pkg);
 		c_sys_close(fd);
+		c_arr_trunc(getdbln(nil), 0, sizeof(uchar));
 	}
 	c_ioq_flush(ioq1);
 	return 0;
