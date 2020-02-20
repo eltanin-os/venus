@@ -68,8 +68,8 @@ archivefd(ctype_fd afd, char **av)
 			c_arr_trunc(&arr, 0, sizeof(uchar));
 			if (c_dyn_ready(&arr, p->stp->size, sizeof(uchar)) < 0)
 				c_err_die(1, "c_dyn_ready");
-			if (c_sys_readlink(c_arr_data(&arr),
-			    p->stp->size, p->path) < 0)
+			if (c_sys_readlink(p->path,
+			    c_arr_data(&arr), p->stp->size) < 0)
 				c_err_die(1, "c_sys_readlink");
 			c_ioq_nput(&ioq, c_arr_data(&arr), p->stp->size);
 		}

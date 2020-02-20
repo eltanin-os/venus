@@ -62,8 +62,8 @@ douncompress(ctype_fd fd)
 	case -1:
 		c_err_die(1, "c_sys_fork");
 	case 0:
-		c_sys_dup(fd, C_FD0);
-		c_sys_dup(fds[1], C_FD1);
+		c_sys_dup2(fd, C_FD0);
+		c_sys_dup2(fds[1], C_FD1);
 		c_sys_close(fds[0]);
 		c_sys_close(fds[1]);
 		av = av1make(uncompress);

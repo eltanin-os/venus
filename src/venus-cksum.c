@@ -15,7 +15,7 @@ putlink(ctype_hst *h, ctype_hmd *md, char *s, size n)
 	if (c_dyn_ready(&arr, n, sizeof(uchar)) < 0)
 		c_err_die(1, "c_dyn_ready");
 
-	if ((r = c_sys_readlink(c_arr_data(&arr), n, s)) < 0)
+	if ((r = c_sys_readlink(s, c_arr_data(&arr), n)) < 0)
 		return c_err_warn("c_sys_readlink %s", s);
 
 	c_hsh_all(h, md, c_arr_data(&arr), n);
@@ -63,7 +63,7 @@ cksum_main(int argc, char **argv)
 				continue;
 			}
 		} else {
-			if (c_sys_lstat(&st, *argv) < 0) {
+			if (c_sys_lstat(*argv, &st) < 0) {
 				r = c_err_warnx("c_sys_lstat %s", *argv);
 				continue;
 			}
