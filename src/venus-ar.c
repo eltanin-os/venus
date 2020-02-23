@@ -19,7 +19,7 @@ usage(void)
 	c_std_exit(1);
 }
 
-int
+ctype_status
 ar_main(int argc, char **argv)
 {
 	int op;

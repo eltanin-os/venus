@@ -39,29 +39,12 @@ wcheck(char *file, char *s)
 void
 chksumetc(ctype_fd etcfd, char *file)
 {
-	ctype_ioq ioq;
-	ctype_arr *ap;
-	usize n;
-	char *s;
-	char buf[C_BIOSIZ];
+	struct cfg cfg;
 
-	c_sys_seek(etcfd, 0, C_SEEKSET);
-	c_ioq_init(&ioq, etcfd, buf, sizeof(buf), &c_sys_read);
-	s = nil;
-	while ((ap = getln(&ioq))) {
-		n = c_arr_bytes(ap);
-		if (!(s = c_mem_chr(c_arr_data(ap), n, ' ')))
-			c_err_diex(1, CHKSUMFILE ": wrong format");
-		n -= s - (char *)c_arr_data(ap);
-		*s++ = 0;
-		if (!c_str_cmp(c_arr_data(ap), n, file))
-			break;
-		s = nil;
-	}
-	if (!s)
-		c_err_diex(1, "%s: have no checksum", file);
-	if (wcheck(file, s) < 0)
+	cfginit(&cfg, etcfd);
+	if (wcheck(file, ecfgfind(&cfg, file)) < 0)
 		c_err_diex(1, "%s: checksum mismatch", file);
+	cfgclose(&cfg);
 }
 
 ctype_status

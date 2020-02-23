@@ -13,7 +13,7 @@ BIN=\
 BINSHARED=\
 	src/ar.c\
 	src/chksum.c\
-	src/dyn.c\
+	src/conf.c\
 	src/fs.c\
 	src/main.c\
 	src/utils.c\

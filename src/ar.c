@@ -77,22 +77,22 @@ archivefd(ctype_fd afd, char **av)
 	c_dir_close(&dir);
 	c_dyn_free(&arr);
 	c_ioq_flush(&ioq);
-	c_sys_close(afd);
 	return 0;
 }
 
 ctype_status
 archive(char *file, char **av)
 {
+	ctype_status r;
 	ctype_fd fd;
 
 	if (!CSTRCMP("<stdin>", file))
 		return archivefd(C_FD1, av);
 
-	if ((fd = c_sys_open(file, WOPTS, WMODE)) < 0)
-		c_err_die(1, "c_sys_open %s", file);
-
-	return archivefd(fd, av);
+	fd = eopen(file, WOPTS, WMODE);
+	r = archivefd(fd, av);
+	c_sys_close(fd);
+	return r;
 }
 
 static void
@@ -156,8 +156,7 @@ unarchivefd(ctype_fd afd)
 				    c_arr_data(&arr), s);
 			c_std_free(s);
 		} else {
-			if ((fd = c_sys_open(s, WOPTS, WMODE)) < 0)
-				c_err_die(1, "c_sys_open %s", s);
+			fd = eopen(s, WOPTS, WMODE);
 			while (h.size) {
 				if ((r = c_ioq_feed(&ioq)) <= 0)
 					c_err_diex(1, "incomplete file");
@@ -174,20 +173,20 @@ unarchivefd(ctype_fd afd)
 		}
 	}
 	c_dyn_free(&arr);
-	c_sys_close(afd);
 	return 0;
 }
 
 ctype_status
 unarchive(char *file)
 {
+	ctype_status r;
 	ctype_fd fd;
 
 	if (!CSTRCMP("<stdout>", file))
 		return unarchivefd(C_FD0);
 
-	if ((fd = c_sys_open(file, ROPTS, RMODE)) < 0)
-		c_err_die(1, "c_sys_open %s", file);
-
-	return unarchivefd(fd);
+	fd = eopen(file, ROPTS, RMODE);
+	r = unarchivefd(fd);
+	c_sys_close(fd);
+	return r;
 }

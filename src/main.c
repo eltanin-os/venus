@@ -3,7 +3,7 @@
 
 #include "common.h"
 
-int
+ctype_status
 main(int argc, char **argv)
 {
 	char *s;

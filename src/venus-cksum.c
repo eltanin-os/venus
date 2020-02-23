@@ -5,7 +5,7 @@
 
 static char *tmpav[] = { "-", nil };
 
-static int
+static ctype_status
 putlink(ctype_hst *h, ctype_hmd *md, char *s, size n)
 {
 	static ctype_arr arr;
@@ -29,7 +29,7 @@ usage(void)
 	c_std_exit(1);
 }
 
-int
+ctype_status
 cksum_main(int argc, char **argv)
 {
 	ctype_hst h;
