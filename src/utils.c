@@ -59,7 +59,7 @@ douncompress(char *file)
 	if (!(id = c_exc_spawn1(*av, av, environ, &fd, 1)))
 		c_err_die(1, "c_spawn1pipe %s", *av);
 	c_std_free(av);
-	unarchivefd(C_FD0);
+	unarchivefd(fd);
 	c_sys_waitpid(id, nil, 0);
 	c_sys_close(fd);
 }
