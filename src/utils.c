@@ -37,7 +37,7 @@ dofetch(char *url)
 
 	s = estrdup(c_gen_basename(url));
 	url = urlencode(url);
-	if (!(av = c_std_vtoptr(fetch, s, url)))
+	if (!(av = c_exc_arglist(fetch, s, url)))
 		c_err_die(1, "c_std_vtoptr");
 	if (!(id = c_exc_spawn0(*av, av, environ)))
 		c_err_die(1, "c_exc_spawn0 %s", *av);
@@ -54,7 +54,7 @@ douncompress(char *file)
 	ctype_id id;
 	char **av;
 
-	if (!(av = c_std_vtoptr(uncompress, file)))
+	if (!(av = c_exc_arglist(uncompress, file)))
 		c_err_die(1, "c_std_vtoptr");
 	if (!(id = c_exc_spawn1(*av, av, environ, &fd, 1)))
 		c_err_die(1, "c_spawn1pipe %s", *av);
