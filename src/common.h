@@ -93,6 +93,23 @@ eopen(char *s, uint opts, uint mode)
 }
 
 static inline char *
+epathdup(char *s)
+{
+	ctype_arr arr;
+	usize n;
+	char *sep;
+
+	n = c_str_len(s, C_USIZEMAX);
+	c_mem_set(&arr, sizeof(arr), 0);
+	if (c_dyn_ready(&arr, n + 2, sizeof(uchar)) < 0)
+		c_err_die(1, "c_dyn_ready");
+
+	sep = (s[n - 1] == '/') ? "" : "/";
+	c_arr_fmt(&arr, "%s%s", s, sep);
+	return c_arr_data(&arr);
+}
+
+static inline char *
 estrdup(char *s)
 {
 	char *p;

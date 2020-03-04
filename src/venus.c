@@ -11,7 +11,6 @@
  (!CSTRCMP("rdeps", (a)) ? &pkglrdeps :\
  (usage(), (int (*)(struct package *))nil))))
 
-
 struct package {
 	struct cfg cfg;
 	ctype_arr name;
@@ -67,7 +66,7 @@ readcfg(void)
 	cfginit(&cfg, fd);
 	arch = estrdup(ecfgfind(&cfg, "arch"));
 	fetch = estrdup(ecfgfind(&cfg, "fetch"));
-	root = estrdup(ecfgfind(&cfg, "root"));
+	root = epathdup(ecfgfind(&cfg, "root"));
 	safeurl = estrdup(ecfgfind(&cfg, "safeurl"));
 	uncompress = estrdup(ecfgfind(&cfg, "uncompress"));
 	url = estrdup(ecfgfind(&cfg, "url"));
@@ -78,12 +77,13 @@ readcfg(void)
 static void
 startfd(void)
 {
-	fd_cache = eopen(CACHEDIR, ROPTS, RMODE);
 	fd_dot = eopen(".", ROPTS, RMODE);
-	fd_chksum = eopen(CHKSUMFILE, ROPTS, RMODE);
+	fd_root = eopen(root, C_OREAD, 0);
+	efchdir(fd_root);
+	fd_cache = eopen(CACHEDIR, ROPTS, RMODE);
+	fd_chksum = eopen(CHKSUMFILE, ROPTS | C_OCREATE, RMODE);
 	fd_etc = eopen(ETCDIR, ROPTS, RMODE);
 	fd_remote = eopen(REMOTEDB, ROPTS, RMODE);
-	fd_root = eopen(root, C_OREAD, 0);
 }
 
 /* pkg db routines */
@@ -186,8 +186,8 @@ pkgexplode(struct package *pkg)
 	ctype_arr arr;
 
 	c_mem_set(&arr, sizeof(arr), 0);
-	if (c_dyn_fmt(&arr, "%s/%s#%s.v%s",
-	    CACHEDIR, c_arr_data(&pkg->name),
+	if (c_dyn_fmt(&arr, "%s%s/%s#%s.v%s",
+	    root, CACHEDIR, c_arr_data(&pkg->name),
 	    c_arr_data(&pkg->version), EXTCOMP) < 0)
 		c_err_die(1, "c_dyn_fmt");
 
@@ -195,7 +195,8 @@ pkgexplode(struct package *pkg)
 	douncompress(c_arr_data(&arr));
 
 	c_arr_trunc(&arr, 0, sizeof(uchar));
-	if (c_dyn_fmt(&arr, "%s/%s", LOCALDB, c_arr_data(&pkg->name)) < 0)
+	if (c_dyn_fmt(&arr, "%s%s/%s", root,
+	    LOCALDB, c_arr_data(&pkg->name)) < 0)
 		c_err_die(1, "c_dyn_fmt");
 
 	efchdir(fd_dot);
@@ -278,7 +279,7 @@ pkgupdate(struct package *pkg)
 	dofetch(c_arr_data(&arr));
 
 	c_arr_trunc(&arr, 0, sizeof(uchar));
-	if (c_dyn_fmt(&arr, "%s/%s", CACHEDIR, RDBNAME) < 0)
+	if (c_dyn_fmt(&arr, "%s%s/%s", root, CACHEDIR, RDBNAME) < 0)
 		c_err_die(1, "c_dyn_fmt");
 
 	efchdir(fd_remote);
