@@ -116,11 +116,11 @@ unarchivefd(ctype_fd afd)
 	size r;
 	char *s;
 	char buf[C_BIOSIZ];
-	char hbuf[16];
+	char hb[16];
 
 	c_ioq_init(&ioq, afd, buf, sizeof(buf), &c_sys_read);
-	getall(&ioq, hbuf, sizeof(MAGIC) - 1);
-	if (STRCMP(MAGIC, hbuf))
+	getall(&ioq, hb, sizeof(MAGIC) - 1);
+	if (STRCMP(MAGIC, hb))
 		c_err_diex(1, "unknown format");
 
 	c_mem_set(&arr, sizeof(arr), 0);
@@ -128,8 +128,8 @@ unarchivefd(ctype_fd afd)
 		if (!c_ioq_feed(&ioq))
 			break;
 
-		getall(&ioq, hbuf, sizeof(hbuf));
-		s = hbuf;
+		getall(&ioq, hb, sizeof(hb));
+		s = hb;
 		h.mode = c_uint_32unpack(s);
 		s += sizeof(h.mode);
 		h.namesize = c_uint_32unpack(s);
@@ -144,19 +144,28 @@ unarchivefd(ctype_fd afd)
 		getall(&ioq, s, h.namesize);
 		s[h.namesize] = 0;
 		makepath(s);
+		c_mem_cpy(hb, sizeof(hb), ".XXXXXXXXXXXXXX\0");
 		if (C_ISLNK(h.mode)) {
 			s = estrdup(s);
 			c_arr_trunc(&arr, 0, sizeof(uchar));
 			if (c_dyn_ready(&arr, h.size, sizeof(uchar)) < 0)
 				c_err_die(1, "c_dyn_ready");
-			c_sys_unlink(s);
 			getall(&ioq, c_arr_data(&arr), h.size);
-			if (c_sys_symlink(c_arr_data(&arr), s))
-				c_err_die(1, "c_sys_symlink %s %s",
-				    c_arr_data(&arr), s);
+			for (;;) {
+				c_rand_name(hb + 1, sizeof(hb) - 2);
+				if (c_sys_symlink(c_arr_data(&arr), hb)) {
+					if (errno == C_EEXIST)
+						continue;
+					c_err_die(1, "c_sys_symlink %s %s",
+					    c_arr_data(&arr), hb);
+				}
+			}
+			if (c_sys_rename(hb, s) < 0)
+				c_err_die(1, "c_sys_rename %s %s", hb, s);
 			c_std_free(s);
 		} else {
-			fd = eopen(s, WOPTS, WMODE);
+			if ((fd = c_std_mktemp(hb, sizeof(hb), 0, WOPTS)) < 0)
+				c_err_die(1, "c_std_mktemp %s", hb);
 			while (h.size) {
 				if ((r = c_ioq_feed(&ioq)) <= 0)
 					c_err_diex(1, "incomplete file");
@@ -170,6 +179,8 @@ unarchivefd(ctype_fd afd)
 			if (c_sys_fchmod(fd, h.mode) < 0)
 				c_err_die(1, "c_sys_fchmod");
 			c_sys_close(fd);
+			if (c_sys_rename(hb, s) < 0)
+				c_err_die(1, "c_sys_rename %s %s", hb, s);
 		}
 	}
 	c_dyn_free(&arr);
