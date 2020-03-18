@@ -63,7 +63,7 @@ cksum_main(int argc, char **argv)
 				continue;
 			}
 		} else {
-			if (c_sys_lstat(*argv, &st) < 0) {
+			if (c_sys_lstat(&st, *argv) < 0) {
 				r = c_err_warnx("c_sys_lstat %s", *argv);
 				continue;
 			}
