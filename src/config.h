@@ -9,5 +9,5 @@
 #define SNAME "chksum"
 
 #define ETCDIR "etc"
-#define CONFIGFILE ETCDIR "/venus.conf"
+#define CONFIGFILE "/" ETCDIR "/venus.conf"
 #define CHKSUMFILE ETCDIR "/" SNAME
