@@ -371,6 +371,9 @@ venus_main(int argc, char **argv)
 		usage();
 	} C_ARGEND
 
+	if (!func)
+		usage();
+
 	readcfg();
 	startfd();
 	if (func == pkgupdate)
@@ -378,12 +381,12 @@ venus_main(int argc, char **argv)
 	if (dbflag)
 		db = dbflag;
 
+	r = 0;
 	c_mem_set(&arr, sizeof(arr), 0);
 	c_mem_set(&pkg, sizeof(pkg), 0);
-	r = 0;
 	for (; *argv; ++argv) {
 		c_arr_trunc(&arr, 0, sizeof(uchar));
-		if (c_dyn_fmt(&arr, "%s%s", db, *argv) < 0)
+		if (c_dyn_fmt(&arr, "%s%s%s", *db ? root : "", db, *argv) < 0)
 			c_err_die(1, "c_dyn_fmt");
 		pkg.path = c_arr_data(&arr);
 		if ((fd = c_sys_open(pkg.path, ROPTS, RMODE)) < 0) {
