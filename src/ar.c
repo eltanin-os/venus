@@ -143,10 +143,10 @@ unarchivefd(ctype_fd afd)
 		s = c_arr_data(&arr);
 		getall(&ioq, s, h.namesize);
 		s[h.namesize] = 0;
+		s = estrdup(s);
 		makepath(s);
 		c_mem_cpy(hb, sizeof(hb), ".XXXXXXXXXXXXXX\0");
 		if (C_ISLNK(h.mode)) {
-			s = estrdup(s);
 			c_arr_trunc(&arr, 0, sizeof(uchar));
 			if (c_dyn_ready(&arr, h.size, sizeof(uchar)) < 0)
 				c_err_die(1, "c_dyn_ready");
@@ -160,18 +160,15 @@ unarchivefd(ctype_fd afd)
 					    c_arr_data(&arr), hb);
 				}
 			}
-			if (c_sys_rename(hb, s) < 0)
-				c_err_die(1, "c_sys_rename %s %s", hb, s);
-			c_std_free(s);
 		} else {
-			if ((fd = c_std_mktemp(hb, sizeof(hb), 0, WOPTS)) < 0)
+			if ((fd = c_std_mktemp(hb, sizeof(hb), 0, 0)) < 0)
 				c_err_die(1, "c_std_mktemp %s", hb);
 			while (h.size) {
 				if ((r = c_ioq_feed(&ioq)) <= 0)
 					c_err_diex(1, "incomplete file");
 				r = C_MIN(r, (size)h.size);
-				s = c_ioq_peek(&ioq);
-				if (c_std_allrw(c_sys_write, fd, s, r) < 0)
+				if (c_std_allrw(c_sys_write, fd,
+				    c_ioq_peek(&ioq), r) < 0)
 					c_err_die(1, "c_std_allrw");
 				h.size -= r;
 				c_ioq_seek(&ioq, r);
@@ -179,9 +176,10 @@ unarchivefd(ctype_fd afd)
 			if (c_sys_fchmod(fd, h.mode) < 0)
 				c_err_die(1, "c_sys_fchmod");
 			c_sys_close(fd);
-			if (c_sys_rename(hb, s) < 0)
-				c_err_die(1, "c_sys_rename %s %s", hb, s);
 		}
+		if (c_sys_rename(hb, s) < 0)
+			c_err_die(1, "c_sys_rename %s %s", hb, s);
+		c_std_free(s);
 	}
 	c_dyn_free(&arr);
 	return 0;
