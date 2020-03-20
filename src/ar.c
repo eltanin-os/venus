@@ -4,6 +4,7 @@
 #include "common.h"
 
 #define MAGIC "3EA81233"
+#define PATHSIZ(a) (((a) << 1) + 18)
 
 struct header {
 	u32int mode;
@@ -110,11 +111,11 @@ ctype_status
 unarchivefd(ctype_fd afd)
 {
 	struct header h;
-	ctype_arr arr;
+	ctype_arr arr, dest;
 	ctype_ioq ioq;
 	ctype_fd fd;
 	size r;
-	char *s;
+	char *d, *s;
 	char buf[C_BIOSIZ];
 	char hb[16];
 
@@ -143,26 +144,38 @@ unarchivefd(ctype_fd afd)
 		s = c_arr_data(&arr);
 		getall(&ioq, s, h.namesize);
 		s[h.namesize] = 0;
-		s = estrdup(s);
 		makepath(s);
-		c_mem_cpy(hb, sizeof(hb), ".XXXXXXXXXXXXXX\0");
+
+		c_arr_trunc(&dest, 0, sizeof(uchar));
+		if (c_dyn_ready(&dest, PATHSIZ(h.namesize), sizeof(uchar)) < 0)
+			c_err_die(1, "c_dyn_ready");
+
+		d = c_arr_data(&dest);
+		if (c_mem_chr(s, h.namesize, '/')) {
+			c_gen_dirname(c_mem_cpy(d, h.namesize + 1, s));
+			c_arr_fmt(&dest, "%s/", d);
+		}
+		c_arr_fmt(&dest, "VENUS@XXXXXXXXX");
+		r = c_arr_bytes(&dest);
+		s = c_mem_cpy(d + r + 1, h.namesize + 1, s);
 		if (C_ISLNK(h.mode)) {
 			c_arr_trunc(&arr, 0, sizeof(uchar));
 			if (c_dyn_ready(&arr, h.size, sizeof(uchar)) < 0)
 				c_err_die(1, "c_dyn_ready");
 			getall(&ioq, c_arr_data(&arr), h.size);
 			for (;;) {
-				c_rand_name(hb + 1, sizeof(hb) - 2);
-				if (c_sys_symlink(c_arr_data(&arr), hb)) {
+				c_rand_name(d + (r - 9), 9);
+				if (c_sys_symlink(c_arr_data(&arr), d) < 0) {
 					if (errno == C_EEXIST)
 						continue;
 					c_err_die(1, "c_sys_symlink %s %s",
-					    c_arr_data(&arr), hb);
+					    c_arr_data(&arr), d);
 				}
+				break;
 			}
 		} else {
-			if ((fd = c_std_mktemp(hb, sizeof(hb), 0, 0)) < 0)
-				c_err_die(1, "c_std_mktemp %s", hb);
+			if ((fd = c_std_mktemp(d, r, 0, 0)) < 0)
+				c_err_die(1, "c_std_mktemp %s", d);
 			while (h.size) {
 				if ((r = c_ioq_feed(&ioq)) <= 0)
 					c_err_diex(1, "incomplete file");
@@ -177,11 +190,11 @@ unarchivefd(ctype_fd afd)
 				c_err_die(1, "c_sys_fchmod");
 			c_sys_close(fd);
 		}
-		if (c_sys_rename(hb, s) < 0)
-			c_err_die(1, "c_sys_rename %s %s", hb, s);
-		c_std_free(s);
+		if (c_sys_rename(d, s) < 0)
+			c_err_die(1, "c_sys_rename %s %s", d, s);
 	}
 	c_dyn_free(&arr);
+	c_dyn_free(&dest);
 	return 0;
 }
 
