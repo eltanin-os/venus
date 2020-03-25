@@ -67,10 +67,11 @@ archivefd(ctype_fd afd, char **av)
 		case C_FSSL:
 		case C_FSSLN:
 			c_arr_trunc(&arr, 0, sizeof(uchar));
-			if (c_dyn_ready(&arr, p->stp->size, sizeof(uchar)) < 0)
+			if (c_dyn_ready(&arr,
+			    p->stp->size + 1, sizeof(uchar)) < 0)
 				c_err_die(1, "c_dyn_ready");
 			if (c_sys_readlink(p->path,
-			    c_arr_data(&arr), p->stp->size) < 0)
+			    c_arr_data(&arr), c_arr_total(&arr)) < 0)
 				c_err_die(1, "c_sys_readlink");
 			c_ioq_nput(&ioq, c_arr_data(&arr), p->stp->size);
 		}
@@ -163,6 +164,7 @@ unarchivefd(ctype_fd afd)
 			if (c_dyn_ready(&arr, h.size, sizeof(uchar)) < 0)
 				c_err_die(1, "c_dyn_ready");
 			getall(&ioq, c_arr_data(&arr), h.size);
+			*((char *)c_arr_data(&arr) + h.size) = 0;
 			for (;;) {
 				c_rand_name(d + (r - 9), 9);
 				if (c_sys_symlink(c_arr_data(&arr), d) < 0) {

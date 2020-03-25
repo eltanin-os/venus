@@ -68,7 +68,7 @@ cksum_main(int argc, char **argv)
 				continue;
 			}
 			if (C_ISLNK(st.mode)) {
-				if (putlink(&h, md, *argv, st.size) < 0)
+				if (putlink(&h, md, *argv, st.size + 1) < 0)
 					continue;
 			} else if (c_hsh_putfile(&h, md, *argv) < 0) {
 				r = c_err_warnx("c_hsh_putfile %s", *argv);
