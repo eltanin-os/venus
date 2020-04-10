@@ -176,7 +176,7 @@ unarchivefd(ctype_fd afd)
 				break;
 			}
 		} else {
-			if ((fd = c_std_mktemp(d, r, 0, 0)) < 0)
+			if ((fd = c_std_mktemp(d, r, 0)) < 0)
 				c_err_die(1, "c_std_mktemp %s", d);
 			while (h.size) {
 				if ((r = c_ioq_feed(&ioq)) <= 0)
