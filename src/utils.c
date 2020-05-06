@@ -55,9 +55,9 @@ douncompress(char *file)
 	char **av;
 
 	if (!(av = c_exc_arglist(uncompress, file)))
-		c_err_die(1, "c_std_vtoptr");
+		c_err_die(1, "c_std_arglist");
 	if (!(id = c_exc_spawn1(*av, av, environ, &fd, 1)))
-		c_err_die(1, "c_spawn1pipe %s", *av);
+		c_err_die(1, "c_exc_spawn1 %s", *av);
 	c_std_free(av);
 	unarchivefd(fd);
 	c_sys_waitpid(id, nil, 0);

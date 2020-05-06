@@ -6,8 +6,11 @@
 static void
 findstart(struct cfg *p)
 {
-	c_sys_seek(p->fd, 0, C_SEEKSET);
-	c_ioq_init(&p->ioq, p->fd, p->buf, sizeof(p->buf), &c_sys_read);
+	ctype_fd fd;
+
+	fd = c_ioq_fileno(&p->ioq);
+	c_sys_seek(fd, 0, C_SEEKSET);
+	c_ioq_init(&p->ioq, fd, p->buf, sizeof(p->buf), &c_sys_read);
 }
 
 static char *
@@ -31,8 +34,7 @@ void
 cfginit(struct cfg *p, ctype_fd fd)
 {
 	c_arr_init(&p->arr, nil, 0);
-	c_ioq_init(&p->ioq, p->fd, p->buf, sizeof(p->buf), &c_sys_read);
-	p->fd = fd;
+	c_ioq_init(&p->ioq, fd, p->buf, sizeof(p->buf), &c_sys_read);
 	p->tag = 0;
 }
 

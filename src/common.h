@@ -11,7 +11,6 @@
 struct cfg {
 	ctype_arr arr;
 	ctype_ioq ioq;
-	ctype_fd fd;
 	int tag;
 	char buf[C_BIOSIZ];
 };
