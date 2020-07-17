@@ -1,4 +1,4 @@
-.Dd $Mdocdate: December 29 2019 $
+.Dd $Mdocdate: July 17 2020 $
 .Dt VENUS-AR 1
 .Os
 .Sh NAME
@@ -6,10 +6,10 @@
 .Nd archiver
 .Sh SYNOPSIS
 .Nm
-.Fl c Op Fl f Ar file
+.Fl c Op Fl f Ar archive
 .Op Ar
 .Nm
-.Fl x Op Fl f Ar file
+.Fl x Op Fl f Ar archive
 .Sh DESCRIPTION
 The
 .Nm
@@ -27,13 +27,21 @@ In the second form,
 .Nm
 will read the archive from the standard input,
 and write its content under the working directory.
+.Pp
+If
+.Ar file
+is a single dash
+.Pq Sq \&-
+or absent,
+.Nm
+reads from the standard input.
 .Sh OPTIONS
 .Bl -tag -width Ds
 .It Fl c
 Set operation to archive.
-.It Fl f Ar file
+.It Fl f Ar archive
 Set
-.Ar file
+.Ar archive
 as input/output file.
 .It Fl x
 Set operation to unarchive.

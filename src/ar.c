@@ -28,55 +28,69 @@ store64(ctype_ioq *p, u64int x)
 	c_ioq_nput(p, c_uint_64pack(tmp, x), sizeof(x));
 }
 
+static void
+putfile(ctype_ioq *ioq, ctype_arr *ap, char *s, usize len, ctype_stat *stp)
+{
+	store32(ioq, stp->mode);
+	store32(ioq, len);
+	store64(ioq, stp->size);
+	c_ioq_nput(ioq, s, len);
+	if (C_ISREG(stp->mode)) {
+		if (c_ioq_putfile(ioq, s) < 0)
+			c_err_diex(1, "c_ioq_putfile %s", s);
+	} else if (C_ISLNK(stp->mode)) {
+		c_arr_trunc(ap, 0, sizeof(uchar));
+		if (c_dyn_ready(ap, stp->size + 1, sizeof(uchar)) < 0)
+			c_err_die(1, "c_dyn_ready");
+		if (c_sys_readlink(s, c_arr_data(ap), c_arr_total(ap)) < 0)
+			c_err_die(1, "c_sys_readlink");
+		c_ioq_nput(ioq, c_arr_data(ap), stp->size);
+	}
+}
+
 ctype_status
 archivefd(ctype_fd afd, char **av)
 {
-	ctype_arr arr;
+	ctype_stat st;
 	ctype_dir dir;
 	ctype_dent *p;
 	ctype_ioq ioq;
+	ctype_arr arr, line;
+	usize len;
+	char *s;
 	char buf[C_BIOSIZ];
 
 	c_ioq_init(&ioq, afd, buf, sizeof(buf), &c_sys_write);
 	c_ioq_put(&ioq, MAGIC);
-	if (!*av)
-		return 0;
-
-	if (c_dir_open(&dir, av, 0, nil) < 0)
-		c_err_die(1, "c_dir_open");
-
 	c_mem_set(&arr, sizeof(arr), 0);
-	while ((p = c_dir_read(&dir))) {
-		switch (p->info) {
-		case C_FSD:
-		case C_FSDP:
-		case C_FSNS:
-		case C_FSERR:
-		case C_FSDEF:
-			continue;
+	if (!*av) {
+		c_mem_set(&line, sizeof(line), 0);
+		while (c_ioq_getln(ioq0, &line) > 0) {
+			s = c_arr_data(&line);
+			len = c_arr_bytes(&line);
+			s[--len] = 0;
+			if (c_sys_lstat(&st, s) < 0)
+				c_err_die(1, "c_sys_lstat %s", s);
+			putfile(&ioq, &arr, s, len, &st);
+			c_arr_trunc(&line, 0, sizeof(uchar));
 		}
-		store32(&ioq, p->stp->mode);
-		store32(&ioq, p->len);
-		store64(&ioq, p->stp->size);
-		c_ioq_nput(&ioq, p->path, p->len);
-		switch (p->info) {
-		case C_FSF:
-			if (c_ioq_putfile(&ioq, p->path) < 0)
-				c_err_diex(1, "c_ioq_putfile %s", p->path);
-			break;
-		case C_FSSL:
-		case C_FSSLN:
-			c_arr_trunc(&arr, 0, sizeof(uchar));
-			if (c_dyn_ready(&arr,
-			    p->stp->size + 1, sizeof(uchar)) < 0)
-				c_err_die(1, "c_dyn_ready");
-			if (c_sys_readlink(p->path,
-			    c_arr_data(&arr), c_arr_total(&arr)) < 0)
-				c_err_die(1, "c_sys_readlink");
-			c_ioq_nput(&ioq, c_arr_data(&arr), p->stp->size);
+		c_dyn_free(&line);
+	} else {
+		if (c_dir_open(&dir, av, 0, nil) < 0)
+			c_err_die(1, "c_dir_open");
+		while ((p = c_dir_read(&dir))) {
+			switch (p->info) {
+			case C_FSD:
+			case C_FSDP:
+			case C_FSNS:
+			case C_FSERR:
+			case C_FSDEF:
+				continue;
+			}
+			putfile(&ioq, &arr, p->path, p->len, p->stp);
 		}
+		c_dir_close(&dir);
 	}
-	c_dir_close(&dir);
 	c_dyn_free(&arr);
 	c_ioq_flush(&ioq);
 	return 0;
