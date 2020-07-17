@@ -38,7 +38,7 @@ char *uncompress;
 char *url;
 
 /* global options */
-static int regmode;
+static int regmode = 1;
 
 /* env routines */
 static void
@@ -322,18 +322,17 @@ venus_main(int argc, char **argv)
 	dbflag = nil;
 
 	C_ARGBEGIN {
-	case 'H':
-		regmode = 1;
-		break;
 	case 'L':
 		dbflag = LOCALDB;
 		break;
 	case 'N':
 		dbflag = "";
-		regmode = 1;
 		break;
 	case 'R':
 		dbflag = REMOTEDB;
+		break;
+	case 'S':
+		regmode = 0;
 		break;
 	case 'a':
 		db = REMOTEDB;

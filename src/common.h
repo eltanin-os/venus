@@ -12,7 +12,7 @@ struct cfg {
 	ctype_arr arr;
 	ctype_ioq ioq;
 	int tag;
-	char buf[C_BIOSIZ];
+	char buf[C_SMALLBIOSIZ];
 };
 
 /* archive routines */
