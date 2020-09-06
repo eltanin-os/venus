@@ -318,57 +318,62 @@ venus_main(int argc, char **argv)
 	char *db, *dbflag;
 
 	c_std_setprogname(argv[0]);
+	--argc, ++argv;
 
 	dbflag = nil;
 
-	C_ARGBEGIN {
-	case 'L':
-		dbflag = LOCALDB;
-		break;
-	case 'N':
-		dbflag = "";
-		break;
-	case 'R':
-		dbflag = REMOTEDB;
-		break;
-	case 'S':
-		regmode = 0;
-		break;
-	case 'a':
-		db = REMOTEDB;
-		func = &pkgadd;
-		break;
-	case 'c':
-		db = LOCALDB;
-		func = &pkgcheck;
-		break;
-	case 'd':
-		db = LOCALDB;
-		func = &pkgdel;
-		break;
-	case 'e':
-		db = REMOTEDB;
-		func = &pkgexplode;
-		break;
-	case 'f':
-		db = REMOTEDB;
-		func = &pkgfetch;
-		break;
-	case 'i':
-		db = LOCALDB;
-		func = &pkginfo;
-		break;
-	case 'l':
-		tmp = C_EARGF(usage());
-		func = LARG(tmp);
-		db = LOCALDB;
-		break;
-	case 'u':
-		func = &pkgupdate;
-		break;
-	default:
-		usage();
-	} C_ARGEND
+	while (c_std_getopt(argmain, argc, argv, "LNRSacdefil:u")) {
+		switch (argmain->opt) {
+		case 'L':
+			dbflag = LOCALDB;
+			break;
+		case 'N':
+			dbflag = "";
+			break;
+		case 'R':
+			dbflag = REMOTEDB;
+			break;
+		case 'S':
+			regmode = 0;
+			break;
+		case 'a':
+			db = REMOTEDB;
+			func = &pkgadd;
+			break;
+		case 'c':
+			db = LOCALDB;
+			func = &pkgcheck;
+			break;
+		case 'd':
+			db = LOCALDB;
+			func = &pkgdel;
+			break;
+		case 'e':
+			db = REMOTEDB;
+			func = &pkgexplode;
+			break;
+		case 'f':
+			db = REMOTEDB;
+			func = &pkgfetch;
+			break;
+		case 'i':
+			db = LOCALDB;
+			func = &pkginfo;
+			break;
+		case 'l':
+			tmp = argmain->arg;
+			func = LARG(tmp);
+			db = LOCALDB;
+			break;
+		case 'u':
+			func = &pkgupdate;
+			break;
+		default:
+			usage();
+		}
+	}
+	argc -= argmain->idx;
+	argv += argmain->idx;
 
 	if (!func)
 		usage();

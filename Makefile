@@ -61,8 +61,8 @@ install-man: all
 install: all install-man
 	install -dm 755 $(DESTDIR)/$(PREFIX)/bin
 	install -cm 755 $(BIN) $(DESTDIR)/$(PREFIX)/bin
-	ln -s venus $(DESTDIR)/$(PREFIX)/bin/venus-ar
-	ln -s venus $(DESTDIR)/$(PREFIX)/bin/venus-cksum
+	ln -sf venus $(DESTDIR)/$(PREFIX)/bin/venus-ar
+	ln -sf venus $(DESTDIR)/$(PREFIX)/bin/venus-cksum
 
 clean:
 	rm -f $(BIN) $(OBJ) $(LIB)
