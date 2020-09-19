@@ -42,13 +42,17 @@ cksum_main(int argc, char **argv)
 
 	md = c_hsh_fletcher32;
 
-	C_ARGBEGIN {
-	case 'w':
-		md = c_hsh_whirlpool;
-		break;
-	default:
-		usage();
-	} C_ARGEND
+	while (c_std_getopt(argmain, argc, argv, "w")) {
+		switch (argmain->opt) {
+		case 'w':
+			md = c_hsh_whirlpool;
+			break;
+		default:
+			usage();
+		}
+	}
+	argc -= argmain->idx;
+	argv += argmain->idx;
 
 	if (!argc)
 		argv = tmpav;

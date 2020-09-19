@@ -30,19 +30,23 @@ ar_main(int argc, char **argv)
 	op = ZERO;
 	file = nil;
 
-	C_ARGBEGIN {
-	case 'c':
-		op = ARCHIVE;
-		break;
-	case 'f':
-		file = C_EARGF(usage());
-		break;
-	case 'x':
-		op = UNARCHIVE;
-		break;
-	default:
-		usage();
-	} C_ARGEND
+	while (c_std_getopt(argmain, argc, argv, "cf:x")) {
+		switch (argmain->opt) {
+		case 'c':
+			op = ARCHIVE;
+			break;
+		case 'f':
+			file = argmain->arg;
+			break;
+		case 'x':
+			op = UNARCHIVE;
+			break;
+		default:
+			usage();
+		}
+	}
+	argc -= argmain->idx;
+	argv -= argmain->idx;
 
 	switch (op) {
 	case ARCHIVE:
