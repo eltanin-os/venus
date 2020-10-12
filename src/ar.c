@@ -140,6 +140,7 @@ unarchivefd(ctype_fd afd)
 		c_err_diex(1, "unknown format");
 
 	c_mem_set(&arr, sizeof(arr), 0);
+	c_mem_set(&dest, sizeof(arr), 0);
 	for (;;) {
 		if (!c_ioq_feed(&ioq))
 			break;

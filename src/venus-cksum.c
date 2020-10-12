@@ -39,6 +39,7 @@ cksum_main(int argc, char **argv)
 	char buf[C_HWHIRLPOOL_DIGEST];
 
 	c_std_setprogname(argv[0]);
+	--argc, ++argv;
 
 	md = c_hsh_fletcher32;
 

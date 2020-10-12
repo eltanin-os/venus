@@ -26,6 +26,7 @@ ar_main(int argc, char **argv)
 	char *file;
 
 	c_std_setprogname(argv[0]);
+	--argc, ++argv;
 
 	op = ZERO;
 	file = nil;
@@ -46,7 +47,7 @@ ar_main(int argc, char **argv)
 		}
 	}
 	argc -= argmain->idx;
-	argv -= argmain->idx;
+	argv += argmain->idx;
 
 	switch (op) {
 	case ARCHIVE:
