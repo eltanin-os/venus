@@ -1,4 +1,4 @@
-.Dd $Mdocdate: July 11 2020 $
+.Dd $Mdocdate: September 18 2021 $
 .Dt VENUS 1
 .Os
 .Sh NAME
@@ -6,13 +6,13 @@
 .Nd package manager
 .Sh SYNOPSIS
 .Nm
-.Op Fl HNLR
+.Op Fl NLR
 .Fl acdefi
 .Ar pkg ...
 .Nm
 .Op Fl NLR
 .Fl l
-.Cm files | mdeps | rdeps
+.Cm tag
 .Op Ar pkg ...
 .Nm
 .Fl u
@@ -40,11 +40,9 @@ Set the database to local.
 .It Fl l
 Set the operation to list and the database to local.
 .It Fl N
-Set the database to null, and the register operation to copy.
+Set the database to the current directory.
 .It Fl R
 Set the database to remote.
-.It Fl S
-Set the register operation to symlink.
 .It Fl u
 Set the operation to update.
 .El
@@ -65,11 +63,16 @@ Add an entry from the set database to the local one.
 Populate the remote database and fetch the chksum file.
 .El
 .Sh FILES
-.Bl -tag -width XXXXXXXXXXXXXXXXXXXXXXXX -compat
-.It Pa $HOME/.config/venus.conf
-.It Pa /etc/venus.conf
+.Bl -tag -width XXXXXXXXXXXXXXXXXXXXXXXXXXX -compat
+.It Pa $XDG_CONFIG_HOME/venus.cfg
+.It Pa /etc/venus.cfg
 .El
 .Sh EXIT STATUS
 .Ex -std
 .Sh SEE ALSO
+.Xr venus-ar 1
+.Xr venus-cksum 1
+.Xr venus-conf 1
+.Xr venus-chksum 5
+.Xr venus-conf 5
 .Xr venus-pkgdesc 5

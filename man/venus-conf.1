@@ -1,0 +1,31 @@
+.Dd $Mdocdate: September 18 2021 $
+.Dt venus-conf 1
+.Os
+.Sh NAME
+.Nm venus-conf
+.Nd get keys from venus database files
+.Sh SYNOPSIS
+.Nm
+.Op Fl t
+.Ar key file
+.Sh DESCRIPTION
+The
+.Nm
+utility reads a
+.Ar file
+and searches for the given
+.Ar key
+and, if found, write it to the standard output. The
+.Ar file
+must be encoded in
+.Xr venus-dbfile 5
+format.
+.Sh OPTIONS
+.Bl -tag -width Ds
+.It t
+Search for multiple-value keys.
+.El
+.Sh EXIT STATUS
+.Ex -std
+.Sh SEE ALSO
+.Xr venus-dbfile 5

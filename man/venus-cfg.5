@@ -1,18 +1,15 @@
-.Dd $Mdocdate: February 01 2020 $
-.Dt VENUS-CONF 5
+.Dd $Mdocdate: September 19 2021 $
+.Dt VENUS-CFG 5
 .Os
 .Sh NAME
-.Nm venus-conf
+.Nm venus-cfg
 .Nd venus configuration file
 .Sh DESCRIPTION
 The
 .Nm
 file contains configuration for
-.Xr venus 1
-as a list of variable-value pairs. Each line has the format
-.Ql variable:value.
-.Pp
-The following variables are supported:
+.Xr venus 1 .
+The following variables are supported and obrigatory:
 .Bl -tag -width uncompress
 .It arch
 Set the architecture of the system.
@@ -25,7 +22,12 @@ Set the main repository url.
 .It uncompress
 Set the tool used to uncompress the packages.
 .It url
-Set the repository url.
+Set the packages repository.
+.It safeurl
+Set the security
+.Pq dbfiles and chksum
+repository.
 .El
 .Sh SEE ALSO
 .Xr venus 1
+.Xr venus-conf 1

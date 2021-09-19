@@ -1,0 +1,27 @@
+.Dd $Mdocdate: September 19 2021 $
+.Dt VENUS-DBFILE 5
+.Os
+.Sh NAME
+.Nm venus-dbfile
+.Nd venus database file
+.Sh DESCRIPTION
+The venus database files are just a flat files with two kind of keys
+single-value and multi-value.
+.Pp
+Single value variables are declared as
+.Dl variable:value
+.Pp
+Multiple value variables are declared as
+.Bd -literal -offset indent -compact
+variable{
+	value
+}
+.Ed
+.Pp
+The fields of multiple value variables must be declared one per line,
+started by a tabulation character
+.Pq Sq \et ,
+and separated by a single blank character
+.Pq Sq \ \& .
+.Sh SEE ALSO
+.Xr venus-conf 1
