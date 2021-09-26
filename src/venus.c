@@ -528,6 +528,7 @@ pkgexplode(char **argv)
 			}
 		}
 		c_dir_close(&dir);
+		c_nix_rmdir(c_arr_data(&tmpdir));
 
 		c_arr_trunc(&arr, 0, sizeof(uchar));
 		if (c_dyn_fmt(&arr, "%s/local/%s", dbdir, *argv) < 0)
