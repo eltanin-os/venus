@@ -115,10 +115,6 @@ yesno(void)
 	int ans;
 	char ch;
 
-	if (yflag) {
-		c_ioq_put(ioq1, "\n");
-		return 0;
-	}
 	c_ioq_get(ioq0, &ch, 1);
 	ans = (ch | 32) != 'y';
 	while (ch != '\n') c_ioq_get(ioq0, &ch, 1);
@@ -625,9 +621,13 @@ pkgadd(char **argv)
 	} while ((deps = deps->next)->prev);
 	c_ioq_put(ioq1, "\n");
 
-	c_ioq_fmt(ioq1, "Do you want to continue? [Y/N] ");
-	c_ioq_flush(ioq1);
-	if (yesno()) c_err_diex(1, "Abort");
+	if (yflag) {
+		c_ioq_flush(ioq1);
+	} else {
+		c_ioq_fmt(ioq1, "Do you want to continue? [Y/N] ");
+		c_ioq_flush(ioq1);
+		if (yesno()) c_err_diex(1, "Abort");
+	}
 
 	args[1] = nil;
 	deps = list->next;
