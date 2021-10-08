@@ -448,7 +448,7 @@ pkgdel(char **argv)
 			/* TODO: deal with errors in a better way */
 			if ((c_nix_unlink(s) < 0) && errno != C_ENOENT)
 				c_err_die(1, "c_nix_unlink %s/%s", root, s);
-			c_nix_rmdir(c_gen_dirname(*args));
+			c_nix_rmpath(c_gen_dirname(s));
 		}
 		if ((c_nix_unlink(file) < 0) && errno != C_ENOENT)
 			c_err_die(1, "c_nix_unlink %s", file);
