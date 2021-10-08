@@ -66,6 +66,7 @@ split_lines(char *s) {
 	c_arr_trunc(&arr, 0, sizeof(uchar));
 	if (c_dyn_cat(&arr, &s, 1, sizeof(char *)) < 0)
 		c_err_die(1, "c_dyn_cat");
+
 	for (; *s; ++s) {
 		if (*s == '\n') {
 			*s++ = 0;
@@ -73,6 +74,11 @@ split_lines(char *s) {
 				c_err_die(1, "c_dyn_cat");
 		}
 	}
+
+	s = nil;
+	if (c_dyn_cat(&arr, &s, 1, sizeof(char *)) < 0)
+		c_err_die(1, "c_dyn_cat");
+
 	return c_arr_data(&arr);
 }
 
