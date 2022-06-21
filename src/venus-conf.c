@@ -1,171 +1,183 @@
 #include <tertium/cpu.h>
 #include <tertium/std.h>
 
-#define ALPHA "abcdefghijklmnopqrstuvxwyz"
-
-struct cfg {
-	ctype_arr arr;
-	ctype_ioq ioq;
-	ctype_fd fd;
-	int tag;
-	char buf[C_SMALLBIOSIZ];
+struct conf {
+	ctype_kvtree s;
+	ctype_kvtree m;
 };
 
-static void
-findstart(struct cfg *p)
+static struct conf conf;
+
+static int
+machine(struct conf *c, int state, char *s, usize n)
 {
-	ctype_fd fd;
-
-	fd = c_ioq_fileno(&p->ioq);
-	c_nix_seek(fd, 0, C_SEEKSET);
-	c_ioq_init(&p->ioq, fd, p->buf, sizeof(p->buf), &c_sys_read);
-}
-
-static char *
-getline(struct cfg *p, ctype_status *r)
-{
-	char *s;
-
-	c_arr_trunc(&p->arr, 0, sizeof(uchar));
-	if ((*r = c_ioq_getln(&p->ioq, &p->arr)) < 0)
-		return (void *)-1;
-	if (!*r) {
-		*r = -1;
-		return nil;
-	}
-	s = c_arr_data(&p->arr);
-	s[c_arr_bytes(&p->arr) - 1] = 0;
-	return s;
-}
-
-void
-cfginit(struct cfg *p, ctype_fd fd)
-{
-	c_ioq_init(&p->ioq, fd, p->buf, sizeof(p->buf), &c_sys_read);
-	p->tag = 0;
-	p->fd = fd;
-}
-
-char *
-cfgfind(struct cfg *cfg, char *k)
-{
+	static ctype_node *np;
+	static ctype_arr key; /* "memory leak" */
+	char *p;
 	ctype_status r;
-	char *p, *s;
-
-	findstart(cfg);
-	for (;;) {
-		s = getline(cfg, &r);
-		if (r < 0)
-			return s;
-		if (!(p = c_mem_chr(s, c_arr_bytes(&cfg->arr), ':')))
-			continue;
-		*p++ = 0;
-		if (!(c_str_cmp(s, C_USIZEMAX, k)))
-			return p;
-	}
-}
-
-char *
-cfgfindtag(struct cfg *cfg, char *k)
-{
-	ctype_status r;
-	char *s;
-
-	if (!cfg->tag) {
-		findstart(cfg);
-		do {
-			s = getline(cfg, &r);
-			if (r < 0)
-				return s;
-			if (!c_str_cmp(s, C_USIZEMAX, k))
-				++cfg->tag;
-		} while(!cfg->tag);
-	}
-	s = getline(cfg, &r);
-	if (r < 0)
-		return s;
-	if (*s == '}') {
-		cfg->tag = 0;
-		return nil;
-	}
-	if (*s != '\t') {
-		cfg->tag = 0;
-		errno = C_EINVAL;
-		return (void *)-1;
-	}
-	return ++s;
-}
-
-void
-cfgclose(struct cfg *cfg)
-{
-	c_dyn_free(&cfg->arr);
-	c_mem_set(cfg, sizeof(*cfg), 0);
-}
-
-static char *
-getkey(struct cfg *cfg, char *k, int istag)
-{
-	struct cfg tmp;
-	usize len;
-	int ch;
-	char *e, *p, *s;
-
-	if ((s = (istag ? cfgfindtag : cfgfind)(cfg, k)) == (void *)-1)
-		c_err_die(1, "getkey");
-	if (!s)
-		return nil;
-
-	c_mem_set(&tmp, sizeof(tmp), 0);
-	cfginit(&tmp, cfg->fd);
-	while ((p = c_str_chr(s, c_arr_bytes(&cfg->arr), '$'))) {
-		len = p - s;
-		if (!(s = c_str_dup(s, c_arr_bytes(&cfg->arr))))
-			c_err_die(1, "c_str_dup");
-		p = s + len;
-		*p++ = 0;
-		for (e = p; *e && c_str_casechr(ALPHA, 26, *e); ++e) ;
-		if (*e) {
-			ch = *e;
-			*e++ = 0;
-			c_arr_trunc(&cfg->arr, 0, sizeof(uchar));
-			if (c_dyn_fmt(&cfg->arr,
-			    "%s%s%c%s", s, getkey(&tmp, p, 0), ch, e) < 0)
-				c_err_die(1, "c_dyn_fmt");
+	if (state == 0) {
+		p = c_mem_chr(s, n, ':');
+		if (p) {
+			*p++ = 0;
+			r = c_adt_kvadd(&c->s, s, c_str_dup(p, -1));
+			if (r < 0) c_err_diex(1, "no memory");
+			return 0;
 		} else {
-			c_arr_trunc(&cfg->arr, 0, sizeof(uchar));
-			if (c_dyn_fmt(&cfg->arr,
-			    "%s%s", s, getkey(&tmp, p, 0)) < 0)
-				c_err_die(1, "c_dyn_fmt");
+			r = s[n - 1] == '{';
+			if (!r) c_err_diex(1, "bad formatted file");
+			c_arr_trunc(&key, 0, sizeof(uchar));
+			r = c_dyn_fmt(&key, "%.*s", n-1, s);
+			if (r < 0) c_err_diex(1, "no memory");
+			return 1;
 		}
-		c_std_free(s);
-		s = c_arr_data(&cfg->arr);
+	} else {
+		if (!(s[0] == '}' && s[1] == '\0')) {
+			p = c_str_ltrim(s, n, "\t ");
+			n -= p - s;
+			r = c_adt_lpush(&np, c_adt_lnew(p, c_str_len(p, n)+1));
+			if (r < 0) c_err_diex(1, "no memory");
+			return 1;
+		} else {
+			r = c_adt_kvadd(&c->m, c_arr_data(&key), np);
+			np = nil;
+			return 0;
+		}
 	}
-	cfgclose(&tmp);
-	return s;
+}
+
+static void
+initconf(struct conf *c, ctype_fd fd)
+{
+	ctype_ioq ioq;
+	ctype_arr arr;
+	size r;
+	int state;
+	char buf[C_IOQ_BSIZ];
+	state = 0;
+	c_ioq_init(&ioq, fd, buf, sizeof(buf), &c_nix_fdread);
+	c_mem_set(&arr, sizeof(arr), 0);
+	while ((r = c_ioq_getln(&ioq, &arr)) > 0) {
+		c_arr_trunc(&arr, c_arr_bytes(&arr) - 1, sizeof(uchar));
+		state = machine(c, state, c_arr_data(&arr), c_arr_bytes(&arr));
+		c_arr_trunc(&arr, 0, sizeof(uchar));
+	}
+	if (r < 0) c_err_die(1, "failed to read file");
+}
+
+static char *
+expand(char *value)
+{
+	ctype_arr arr;
+	ctype_status r;
+	char tmp;
+	char *p, *s, *v;
+
+	if (!(s = c_str_chr(value, -1, '$'))) return nil;
+
+	c_mem_set(&arr, sizeof(arr), 0);
+	r = c_dyn_fmt(&arr, "%s", value);
+	if (r < 0) c_err_diex(1, "no memory");
+
+	s = value = c_arr_data(&arr);
+	for (;;) {
+		if (!(s = c_str_chr(s, -1, '$'))) break;
+		p = s + 1;
+		if (*p == '$') {
+			s += 2;
+			if (!*s) break;
+			continue;
+		} else if (*p == '\0') {
+			break;
+		}
+		for (; *p && c_utf8_isalnum(*p); ++p) ;
+		if (p == s) { ++s; continue; }
+		/* get key */
+		tmp = *p; *p = 0;
+		v = c_adt_kvget(&conf.s, s+1);
+		*p = tmp;
+		if (!v) { ++s; continue; }
+		/* expand the variable */
+		c_arr_trunc(&arr, s - value, sizeof(uchar));
+		if (!(p = c_str_dup(p, -1))) c_err_diex(1, "no memory");
+		r = c_dyn_fmt(&arr, "%s%s", v, p);
+		if (r < 0) c_err_diex(1, "no memory");
+		c_std_free(p);
+		s = value = c_arr_data(&arr);
+	}
+
+	s = value = c_arr_data(&arr);
+	for (; *s; ++s) if (*s == '$') c_str_cpy(s, -1, s+1);
+	c_arr_trunc(&arr, s - value, sizeof(uchar));
+
+	c_dyn_shrink(&arr);
+	c_std_free(value);
+	return c_arr_data(&arr);
+}
+
+static void
+skeys(char *k, void *v)
+{
+	if (!v || !(v = expand(v))) return;
+	c_adt_kvadd(&conf.s, k, v);
+}
+
+static void
+mkeys(char *k, void *v)
+{
+	ctype_node *wp;
+
+	if (!v) return;
+	(void)k;
+
+	wp = ((ctype_node *)v)->next;
+	do {
+		if (!(v = expand(wp->p))) continue;
+		wp->p = v;
+	} while ((wp = wp->next)->prev);
+}
+
+static void
+printlist(ctype_node *p)
+{
+	ctype_node *wp;
+	wp = p->next;
+	do {
+		c_ioq_fmt(ioq1, "%s\n", wp->p);
+	} while ((wp = wp->next)->prev);
+}
+
+static void
+freeobj(void *p)
+{
+	c_std_free(p);
+}
+
+static void
+freelist(void *p)
+{
+	ctype_node *list;
+	for (list = p; list;) c_adt_lfree(c_adt_lpop(&list));
 }
 
 static void
 usage(void)
 {
-	c_ioq_fmt(ioq1, "usage: %s [-t] key file\n", c_std_getprogname());
+	c_ioq_fmt(ioq1, "usage: %s [-t] key [file]\n", c_std_getprogname());
 	c_std_exit(1);
 }
 
 ctype_status
 main(int argc, char **argv)
 {
-	ctype_arr arr;
-	struct cfg cfg;
 	ctype_fd fd;
-	uint mode;
-	char *k, *s;
+	int mode;
+	char *s;
 
 	c_std_setprogname(argv[0]);
 	--argc, ++argv;
 
+	fd = 0;
 	mode = 0;
-
 	while (c_std_getopt(argmain, argc, argv, "t")) {
 		switch (argmain->opt) {
 		case 't':
@@ -178,32 +190,28 @@ main(int argc, char **argv)
 	argc -= argmain->idx;
 	argv += argmain->idx;
 
-	if (argc - 2)
+	switch (argc) {
+	case 1:
+		fd = C_IOQ_FD0;
+		break;
+	case 2:
+		fd = c_nix_fdopen2(argv[1], C_NIX_OREAD);
+		if (fd < 0) c_err_die(1, "failed to open file \"%s\"", argv[1]);
+		break;
+	default:
 		usage();
-
-	k = *argv++;
-
-	if ((fd = c_nix_fdopen2(*argv, C_OREAD)) < 0)
-		c_err_die(1, "c_nix_fdopen2 %s", *argv);
-
-	c_mem_set(&cfg, sizeof(cfg), 0);
-	cfginit(&cfg, fd);
-	if (mode) {
-		c_mem_set(&arr, sizeof(arr), 0);
-		if (c_dyn_fmt(&arr, "%s{", k) < 0)
-			c_err_die(1, "c_dyn_fmt");
-		k = c_arr_data(&arr);
-		if ((s = getkey(&cfg, k, 1))) {
-			do {
-				c_ioq_fmt(ioq1, "%s\n", s);
-			} while ((s = getkey(&cfg, nil, 1)));
-		}
-	} else {
-		if ((s = getkey(&cfg, k, 0)))
-			c_ioq_fmt(ioq1, "%s\n", s);
 	}
-	cfgclose(&cfg);
-	c_sys_close(fd);
+	initconf(&conf, fd);
+	c_adt_kvtraverse(&conf.s, skeys);
+	c_adt_kvtraverse(&conf.m, mkeys);
+	if (mode) {
+		if ((s = c_adt_kvget(&conf.m, *argv))) printlist((void *)s);
+	} else {
+		s = c_adt_kvget(&conf.s, *argv);
+		if (s) c_ioq_fmt(ioq1, "%s\n", s);
+	}
+	c_adt_kvfree(&conf.s, freeobj);
+	c_adt_kvfree(&conf.m, freelist);
 	c_ioq_flush(ioq1);
 	return 0;
 }

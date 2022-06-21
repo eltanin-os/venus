@@ -1,8 +1,7 @@
 #include <tertium/cpu.h>
 #include <tertium/std.h>
 
-#define STRCAT(a, b) c_dyn_cat((a), (b), sizeof((b)) - 1, sizeof(uchar))
-#define STRALLOC(a) \
+#define DUPKEY(a) \
 { \
 if (!(a = getkey(#a))) c_err_diex(1, "\"" #a "\" not found in \"%s\"", file); \
 a = c_str_dup((a), -1); \
@@ -25,106 +24,78 @@ static char *safeurl;
 
 static usize columns = 80;
 
-/* spawn routines */
+/* spawn  routines */
 static char *
-getlines(ctype_fd fd) {
-	static ctype_arr arr; /* "memory leak" */
+getlines(ctype_fd fd)
+{
+	static ctype_arr arr;
 	ctype_ioq ioq;
 	ctype_status r;
-	char buf[C_SMALLBIOSIZ];
+	char buf[C_IOQ_BSIZ];
 
 	c_ioq_init(&ioq, fd, buf, sizeof(buf), &c_nix_fdread);
-
 	c_arr_trunc(&arr, 0, sizeof(uchar));
 	while ((r = c_ioq_getln(&ioq, &arr)) > 0) ;
 	c_arr_trunc(&arr, c_arr_bytes(&arr) - 1, sizeof(uchar));
 
-	if (r < 0)
-		c_err_die(1, "c_ioq_getln");
-
+	if (r < 0) c_err_diex(1, "failed to read pipe");
 	return c_arr_data(&arr);
 }
 
+static void
+waitchild(ctype_id id, char *prog)
+{
+	ctype_status r;
+	switch (c_exc_wait(id, &r)) {
+	case 1:
+		if (!r) return;
+		c_err_diex(1, "\"%s\" closed with exit code %d", prog, r);
+	case 2:
+		c_err_diex(1, "\"%s\" closed with signal %d", prog, r);
+	}
+}
+
 static char *
-spawn_getlines(char **args) {
-	ctype_fd fd;
+spawn_getlines(char **args)
+{
 	ctype_id id;
+	ctype_fd fd;
 	char *s;
 
-	if (!(id = c_exc_spawn1(*args, args, environ, &fd, 1)))
-		c_err_die(1, "c_exc_spawn1 %s", *args);
+	id = c_exc_spawn1(*args, args, environ, &fd, 1);
+	if (!id) c_err_diex(1, "failed to spawn \"%s\"", *args);
 	s = getlines(fd);
-	c_nix_waitpid(id, nil, 0);
+	waitchild(id, *args);
 	c_nix_fdclose(fd);
 	return (s && *s) ? s : nil;
 }
 
 static char **
-split_lines(char *s) {
-	static ctype_arr arr; /* "memory leak" */
+split(ctype_arr *ap, char *s)
+{
+	ctype_status r;
 
-	c_arr_trunc(&arr, 0, sizeof(uchar));
-	if (c_dyn_cat(&arr, &s, 1, sizeof(char *)) < 0)
-		c_err_die(1, "c_dyn_cat");
-
+	c_arr_trunc(ap, 0, sizeof(uchar));
+	r = c_dyn_cat(ap, &s, 1, sizeof(char *));
+	if (r < 0) c_err_diex(1, "no memory");
 	for (; *s; ++s) {
-		if (*s == '\n') {
-			*s++ = 0;
-			if (c_dyn_cat(&arr, &s, 1, sizeof(char *)) < 0)
-				c_err_die(1, "c_dyn_cat");
-		}
+		if (*s != '\n') continue;
+		*s++ = 0;
+		r = c_dyn_cat(ap, &s, 1, sizeof(char *));
+		if (r < 0) c_err_diex(1, "no memory");
 	}
-
 	s = nil;
-	if (c_dyn_cat(&arr, &s, 1, sizeof(char *)) < 0)
-		c_err_die(1, "c_dyn_cat");
-
-	return c_arr_data(&arr);
+	r = c_dyn_cat(ap, &s, 1, sizeof(char *));
+	if (r < 0) c_err_diex(1, "no memory");
+	return c_arr_data(ap);
 }
 
-/* helper routines */
-static char *
-getpath(char *s)
+static char **
+ssplit(char *s)
 {
 	static ctype_arr arr; /* "memory leak" */
-	ctype_stat st;
-	char *path;
-
 	c_arr_trunc(&arr, 0, sizeof(uchar));
-	if (c_dyn_fmt(&arr, "%s/%s/%s", dbdir, dbflag, s) < 0)
-		c_err_die(1, "c_dyn_fmt");
-
-	path = c_arr_data(&arr);
-	if (c_nix_stat(&st, path) < 0) {
-		if (errno != C_ENOENT)
-			c_err_die(1, "c_nix_stat %s", path);
-		c_err_diex(1, "package \"%s\" not found in \"%s\"", s, dbflag);
-	}
-	return path;
-}
-
-static void
-chdir_tmpdir(char *s, usize n)
-{
-	ctype_fd fd;
-
-	if ((fd = c_nix_mktemp(s, n, C_OTMPDIR)) < 0)
-		c_err_die(1, "c_nix_mktemp %s", s);
-	if (c_nix_fdchdir(fd) < 0)
-		c_err_die(1, "c_nix_fdchdir");
-	c_nix_fdclose(fd);
-}
-
-static int
-yesno(void)
-{
-	int ans;
-	char ch;
-
-	c_ioq_get(ioq0, &ch, 1);
-	ans = (ch | 32) != 'y';
-	while (ch != '\n') c_ioq_get(ioq0, &ch, 1);
-	return ans;
+	return split(&arr, s);
 }
 
 /* conf routines */
@@ -136,18 +107,10 @@ getkey(char *k)
 }
 
 static char *
-gettag(char *k)
+getmkey(char *k)
 {
 	char *args[] = { "venus-conf", "-t", k, file, nil };
 	return spawn_getlines(args);
-}
-
-static char *
-cut1(char *s)
-{
-	char *tmp = c_str_chr(s, -1, ' ');
-	*tmp = 0;
-	return s;
 }
 
 static char *
@@ -157,51 +120,104 @@ getwsum(char *s)
 	return spawn_getlines(args);
 }
 
-static char *
-getsum(char *s)
+/* helper routines */
+static char **
+argslist(ctype_node *list)
 {
-	char *args[] = { "venus-cksum", s, nil };
-	return spawn_getlines(args);
+	ctype_node *wp;
+	usize i, n;
+	char **args;
+
+	n = 0;
+	wp = list->next;
+	do { ++n; } while ((wp = wp->next)->prev);
+
+	args = c_std_alloc(n+1, sizeof(char *));
+	if (!args) c_err_diex(1, "no memory");
+
+	i = 0;
+	wp = list->next;
+	do {
+		args[i++] = wp->p;
+	} while ((wp = wp->next)->prev);
+	args[i] = nil;
+	return args;
+}
+
+static int
+askconfirm(void)
+{
+	int ans;
+	char ch;
+	c_ioq_get(ioq0, &ch, 1);
+	ans = (ch | 32) != 'y';
+	while (ch != '\n') c_ioq_get(ioq0, &ch, 1);
+	return ans;
 }
 
 static void
-start(void)
+copyfile(char *target, char *s)
 {
-	ctype_arr arr;
-	usize len;
-	char *home;
+	ctype_fd destfd, fd;
+	ctype_status r;
+	char tmp[] = "tmpvenus.XXXXXXXXX";
+	destfd = c_nix_mktemp(tmp, sizeof(tmp));
+	if (destfd < 0) goto fail;
+	fd = c_nix_fdopen2(s, C_NIX_OREAD);
+	if (fd < 0) goto fail;
+	r = c_nix_fdcat(destfd, fd);
+	if (r < 0) goto fail;
+	c_nix_fdclose(destfd);
+	c_nix_fdclose(fd);
+	r = c_nix_rename(target, tmp);
+	if (r < 0) goto fail;
+	return;
+fail:
+	c_nix_unlink(tmp);
+	c_err_diex(1, "failed to copy \"%s\" to \"%s\"", target, s);
+}
 
-	if (!(c_sys_geteuid())) {
-		conf = "/etc/venus.cfg";
-		dbdir = "/var/pkg";
-	} else {
-		if (!(home = c_std_getenv("XDG_CONFIG_HOME"))) {
-			if (!(home = c_std_getenv("HOME")))
-				c_err_diex(1, "missing HOME env variable");
-			c_mem_set(&arr, sizeof(arr), 0);
-			if (c_dyn_fmt(&arr, "%s/.config", home) < 0)
-				c_err_die(1, "c_dyn_fmt");
-			c_dyn_shrink(&arr);
-			home = c_arr_data(&arr); /* "memory leak" */
-		}
-		c_mem_set(&arr, sizeof(arr), 0);
-		if (c_dyn_fmt(&arr, "%s/venus/config%c", home, 0) < 0)
-			c_err_die(1, "c_dyn_fmt");
-		len = c_arr_bytes(&arr);
-		if (c_dyn_fmt(&arr, "%s/venus/db", home) < 0)
-			c_err_die(1, "c_dyn_fmt");
-		c_dyn_shrink(&arr);
-		conf = c_arr_data(&arr); /* "memory leak" */
-		dbdir = conf + len;
+static int
+exist(char *s)
+{
+	ctype_stat st;
+	if (c_nix_stat(&st, s) < 0) return 0;
+	return 1;
+}
+
+static char *
+getpath(char *db, char *s)
+{
+	static ctype_arr arr;
+	ctype_stat st;
+	ctype_status r;
+
+	c_arr_trunc(&arr, 0, sizeof(uchar));
+	r = c_dyn_fmt(&arr, "%s/%s/%s", dbdir, db, s);
+	if (r < 0) c_err_diex(1, "no memory");
+
+	s = c_arr_data(&arr);
+	if (c_nix_stat(&st, s) < 0) {
+		if (errno == C_ERR_ENOENT) return nil;
+		c_err_diex(1, "failed to obtain file info \"%s\"", s);
 	}
+	return s;
+}
 
-	file = conf;
-	STRALLOC(arch); /* "memory leak" */
-	STRALLOC(fetch); /* "memory leak" */
-	STRALLOC(root); /* "memory leak" */
-	STRALLOC(url); /* "memory leak" */
-	STRALLOC(safeurl); /* "memory leak" */
-	STRALLOC(uncompress); /* "memory leak" */
+static char *
+getpathx(char *s)
+{
+	char *path;
+	if (!(path = getpath(dbflag, s)))
+		c_err_diex(1, "package \"%s\" not found in \"%s\"", s, dbflag);
+	return path;
+}
+
+static void
+remove(char *s)
+{
+	if ((c_nix_unlink(s) < 0) && errno != C_ERR_ENOENT)
+		c_err_die(1, "failed to remove file \"%s\"", s);
 }
 
 /* do routines */
@@ -209,62 +225,59 @@ static char *
 urlencode(char *url)
 {
 	static ctype_arr arr; /* "memory leak" */
+	ctype_status r;
 
 	c_arr_trunc(&arr, 0, sizeof(uchar));
-	if (c_dyn_ready(&arr, c_str_len(url, -1), sizeof(uchar)) < 0)
-		c_err_die(1, "c_dyn_ready");
-	while (*url) {
+	r = c_dyn_ready(&arr, c_str_len(url, -1), sizeof(uchar));
+	if (r < 0) c_err_diex(1, "no memory");
+
+	for (; *url; ++url) {
 		switch (*url) {
 		case '#':
-			if (STRCAT(&arr, "%23") < 0)
-				c_err_die(1, "c_dyn_cat");
+			r = c_dyn_cat(&arr, "%23", 3, sizeof(uchar));
+			if (r < 0) c_err_diex(1, "no memory");
 			break;
 		default:
-			if (c_dyn_cat(&arr, url, 1, sizeof(uchar)) < 0)
-				c_err_die(1, "c_dyn_cat");
+			r = c_dyn_cat(&arr, url, 1, sizeof(uchar));
+			if (r < 0) c_err_diex(1, "no memory");
 		}
-		++url;
 	}
 	return c_arr_data(&arr);
 }
 
 static void
-dofetch(char *s, char *u)
+dofetch(char *target, char *url)
 {
 	ctype_id id;
-	char **av;
+	char **args;
 
-	if (!(av = c_exc_arglist(fetch, s, urlencode(u))))
-		c_err_die(1, "c_std_vtoptr");
-	if (!(id = c_exc_spawn0(*av, av, environ)))
-		c_err_die(1, "c_exc_spawn0 %s", *av);
-	c_std_free(av);
-	c_nix_waitpid(id, nil, 0);
-
+	args = c_exc_arglist(fetch, target, urlencode(url));
+	if (!args) c_err_diex(1, "no memory");
+	id = c_exc_spawn0(*args, args, environ);
+	waitchild(id, *args);
+	c_std_free(args);
 }
 
 static void
 douncompress(char *s)
 {
 	ctype_id id;
-	ctype_fd fd;
-	char *args[] = { "venus-ar", "-x", nil };
-	char **av;
-
-	if ((id = c_nix_fork()) < 0)
-		c_err_die(1, "c_nix_fork");
-	if (!id) {
-		if (!(av = c_exc_arglist(uncompress, s)))
-			c_err_die(1, "c_std_arglist");
-		if (!c_exc_spawn1(*av, av, environ, &fd, 1))
-			c_err_die(1, "c_exc_spawn1 %s", *av);
-		c_std_free(av);
-		c_nix_fdmove(C_FD0, fd);
-		if (!(id = c_exc_spawn0(*args, args, environ)))
-			c_err_die(1, "c_exc_spawn0 %s", *args);
-		c_nix_waitpid(id, nil, 0);
-		c_std_exit(0);
-	}
+	ctype_fd fd, svfd;
+	char *prog[] = { "venus-ar", "-x", nil };
+	char **args;
+	/* uncompress */
+	args = c_exc_arglist(uncompress, s);
+	if (!args) c_err_diex(1, "no memory");
+	id = c_exc_spawn1(*args, args, environ, &fd, 1);
+	if (!id) c_err_die(1, nil);
+	c_std_free(args);
+	/* unarchive */
+	svfd = 0;
+	c_nix_fdcopy(svfd, C_IOQ_FD0);
+	c_nix_fdcopy(C_IOQ_FD0, fd);
+	id = c_exc_spawn0(*prog, prog, environ);
+	if (!id) c_err_die(1, nil);
+	c_nix_fdcopy(C_IOQ_FD0, svfd);
 	c_nix_waitpid(-1, nil, 0);
 }
 
@@ -272,328 +285,188 @@ static ctype_status
 dochecksum(char *s)
 {
 	static ctype_arr arr; /* "memory leak" */
-	char *f1, *f2, *p;
+	ctype_status r;
+	usize n;
+	char *local, *p, *remote;
 
-	if (!(f1 = getwsum(s)))
-		return c_err_warnx("failed to obtain sum from \"%s\"", s);
-	f1 = cut1(f1);
+	local = getwsum(s);
+	if (!local) return c_err_warnx("failed to obtain sum from \"%s\"", s);
+	local = c_str_chr(local, -1, ':');
+	if (!local) c_err_diex(1, "bad formatted sum");
 
 	c_arr_trunc(&arr, 0, sizeof(uchar));
-	if (c_dyn_fmt(&arr, "%s/%s/cache/chksum", dbdir, dbflag) < 0)
-		c_err_die(1, "c_dyn_fmt");
+	r = c_dyn_fmt(&arr, "%s%c", local + 1, '\0');
+	if (r < 0) c_err_diex(1, "no memory");
+	n = c_arr_bytes(&arr);
 
-	file = c_arr_data(&arr);
-	if (!(f2 = getkey((p = c_gen_basename(s)))))
-		return c_err_warnx("\"%s\" not found in \"%s/cache/chksum\"",
-		    p, dbflag);
+	r = c_dyn_fmt(&arr, "%s/%s/cache/chksum", dbdir, dbflag);
+	if (r < 0) c_err_diex(1, "no memory");
+	file = (local = c_arr_data(&arr)) + n;
 
-	if (c_str_cmp(f2, -1, f1)) {
-		c_err_warnx("checksum mismatch \"%s\"", s);
-		c_nix_unlink(s);
-		return 1;
+	if (!(remote = getkey((p = c_gen_basename(s)))))
+		return c_err_warnx(
+		    "package \"%s\" not found in \"%s\" chksum", p, dbflag);
+
+	if (c_str_cmp(remote, -1, local)) {
+		remove(s);
+		return 0;
 	}
-	return 0;
-}
-
-/* dep routines */
-static int
-xcheck(ctype_node *p, char *s)
-{
-	if (!p)
-		return 1;
-	p = p->next;
-	do {
-		if (!c_str_cmp(s, -1, p->p))
-			return 0;
-	} while ((p = p->next)->prev);
 	return 1;
 }
 
+/* deps routines */
 static void
-xpush(ctype_node **p, char *s)
+xpush(ctype_node **p, ctype_kvtree *t, char *s)
 {
-	if (xcheck(*p, s))
-		if (c_adt_lpush(p, c_adt_lnew(s, c_str_len(s, -1) + 1)) < 0)
-			c_err_die(1, "c_adt_lpush");
+	ctype_status r;
+	if ((r = c_adt_kvadd(t, s, nil)) == 1) return;
+	if (r < 0) c_err_diex(1, "no memory");
+	r = c_adt_lpush(p, c_adt_lnew(s, c_str_len(s, -1) + 1));
+	if (r < 0) c_err_diex(1, "no memory");
 }
 
-static int
-check_pkg(char *s)
+static char *
+alternative(char *s)
 {
 	static ctype_arr arr; /* "memory leak" */
-	ctype_stat st;
+
+	if (getpath(dbdir, s)) return s;
 
 	c_arr_trunc(&arr, 0, sizeof(uchar));
-	if (c_dyn_fmt(&arr, "%s/local/%s", dbdir, s) < 0)
-		c_err_die(1, "c_dyn_fmt");
-
-	if (c_nix_stat(&st, c_arr_data(&arr)) < 0) {
-		if (errno == C_ENOENT)
-			return 0;
-		c_err_die(1, "c_nix_stat %s", c_arr_data(&arr));
-	}
-	return 1;
+	file = getpathx("alternatives");
+	split(&arr, s);
 }
 
 static void
-solve_deps(ctype_node **list, ctype_node *deps)
+resolvedeps(ctype_node **list, ctype_kvtree *t, ctype_node *deps)
 {
 	ctype_node *n, *wp;
 	char **args, *s;
 
-	if (!deps)
-		return;
+	if (!deps) return;
 
 	n = nil;
 	wp = deps->next;
 	do {
 		if ((s = c_str_chr(wp->p, -1, '#'))) *s = 0;
-		file = getpath(wp->p);
-		if (!(s = gettag("rdeps"))) continue;
-		args = split_lines(s);
+		file = getpathx(wp->p);
+		if (!(s = getmkey("rdeps"))) continue;
+		args = ssplit(s);
 		for (; *args; ++args) {
-			/* TODO: check dep version */
-			if (check_pkg(*args))
-				continue;
-			if (xcheck(*list, *args))
-				xpush(&n, *args);
+			if (getpath("local", *args)) continue;
+			xpush(&n, t, *args);
 		}
 	} while ((wp = wp->next)->prev);
 
 	c_adt_ltpush(list, n);
-	solve_deps(list, n);
+	resolvedeps(list, t, n);
 }
 
 /* pkg routines */
 static void
-nolocal(char *s)
-{
-	if (!c_mem_cmp("local", sizeof("local"), dbflag))
-		c_err_die(1, "\"%s\" from \"local\" makes no sense", s);
-}
-
-static void
-pkgcheck(char **argv)
-{
-	ctype_arr arr;
-	usize n;
-	char **args, *s, *lsum;
-	ctype_status r;
-
-	c_mem_set(&arr, sizeof(arr), 0);
-	r = 0;
-	for (; *argv; ++argv) {
-		c_ioq_fmt(ioq1, "%s: check...\n", *argv);
-		c_ioq_flush(ioq1);
-
-		file = getpath(*argv);
-		if (!(s = gettag("files"))) continue;
-		args = split_lines(s);
-		for (; *args; ++args) {
-			/* assume no whitespaces on names */
-			if (!(s = c_str_chr(*args, -1, ' '))) {
-				r = c_err_warnx(
-				    "\"%s\" in wrong format", *argv);
-				goto next;
-			}
-			*s++ = 0;
-			c_arr_trunc(&arr, 0, sizeof(uchar));
-			if (c_dyn_fmt(&arr, "%s/%s%c", root, s, 0) < 0)
-				c_err_die(1, "c_dyn_fmt");
-			n = c_arr_bytes(&arr);
-			if (c_dyn_fmt(&arr, "%s", *args) < 0)
-				c_err_die(1, "c_dyn_fmt");
-			if (!(lsum = getsum(c_arr_data(&arr)))) {
-				r = c_err_warnx(
-				   "failed to obtain sum from \"%s\"",
-				   c_arr_data(&arr));
-				continue;
-			}
-			lsum = cut1(lsum);
-			if (c_str_cmp((char *)c_arr_data(&arr) + n, -1, lsum))
-				r = c_err_warnx("checksum mismatch \"%s\"", s);
-		}
-next:
-		;
-	}
-	c_dyn_free(&arr);
-	c_std_exit(r);
-}
-
-static void
 pkgdel(char **argv)
 {
-	char **args, *s;
 	ctype_status r;
+	char **args, *s;
 
-	if (c_nix_chdir(root) < 0)
-		c_err_die(1, "c_nix_fdchdir %s", root);
+	r = c_nix_chdir(root);
+	if (r < 0) c_err_die(1, "failed to change dir to \"%s\"", root);
 
 	for (; *argv; ++argv) {
-		c_ioq_fmt(ioq1, "%s: delete...\n", *argv);
-		c_ioq_flush(ioq1);
+		c_ioq_fmt(ioq2, "%s: delete...\n", *argv);
+		c_ioq_flush(ioq2);
 
-		file = getpath(*argv);
-		if (!(s = gettag("files"))) continue;
-		args = split_lines(s);
+		file = getpathx(*argv);
+		if (!(s = getmkey("files"))) continue;
+		args = ssplit(s);
 		for (; *args; ++args) {
-			/* assume no whitespaces on names */
-			if (!(s = c_str_chr(*args, -1, ' '))) {
-				r = c_err_warnx(
-				    "\"%s\" in wrong format", *argv);
-				goto next;
-
-			}
-			*s++ = 0;
-			/* TODO: deal with errors in a better way */
-			if ((c_nix_unlink(s) < 0) && errno != C_ENOENT)
-				c_err_die(1, "c_nix_unlink %s/%s", root, s);
-			c_nix_rmpath(c_gen_dirname(s));
+			if ((s = c_str_chr(*args, -1, ':'))) *s = 0;
+			remove(*args);
+			c_nix_rmpath(c_gen_dirname(*args));
 		}
-		if ((c_nix_unlink(file) < 0) && errno != C_ENOENT)
-			c_err_die(1, "c_nix_unlink %s", file);
-next:
-		;
+		remove(file);
 	}
-	c_std_exit(r);
-}
-
-static void
-pkgexplode(char **argv)
-{
-	ctype_arr arr, tmpdir;
-	ctype_dir dir;
-	ctype_dent *dp;
-	ctype_stat st;
-	ctype_fd dest, src;
-	char *args[] = { ".", nil };
-	char *s;
-
-	nolocal("explode");
-
-	c_mem_set(&arr, sizeof(arr), 0);
-	c_mem_set(&tmpdir, sizeof(tmpdir), 0);
-	for (; *argv; ++argv) {
-		c_ioq_fmt(ioq1, "%s: explode...\n", *argv);
-		c_ioq_flush(ioq1);
-
-		file = getpath(*argv);
-		s = getkey("name");
-		c_arr_trunc(&arr, 0, sizeof(uchar));
-		if (c_dyn_fmt(&arr, "%s/%s/cache/%s", dbdir, dbflag, s) < 0)
-			c_err_die(1, "c_dyn_fmt");
-		s = getkey("version");
-		if (c_dyn_fmt(&arr, "#%s.vlz%c", s, 0) < 0)
-			c_err_die(1, "c_dyn_fmt");
-
-		s = c_arr_data(&arr);
-		if (c_nix_stat(&st, s) < 0) {
-			if (errno != C_ENOENT)
-				c_err_die(1, "c_nix_stat %s", s);
-			c_err_diex(1, "file \"%s\" not found in \"%s/cache\"",
-			    c_gen_basename(s), dbflag);
-		}
-
-		c_arr_trunc(&tmpdir, 0, sizeof(uchar));
-		if (c_dyn_fmt(&tmpdir, "%s/VENUS-TMPDIR.XXXXXXXXX", root) < 0)
-			c_err_die(1, "c_dyn_fmt");
-
-		chdir_tmpdir(c_arr_data(&tmpdir), c_arr_bytes(&tmpdir));
-		douncompress(c_arr_data(&arr));
-		/* TODO: handle signals and maybe create a file to remember
-		 * the operation in case of failure */
-		if (c_dir_open(&dir, args, 0, nil) < 0)
-			c_err_die(1, "c_dir_open %s", *args);
-		while ((dp = c_dir_read(&dir))) {
-			c_arr_trunc(&arr, 0, sizeof(uchar));
-			if (c_dyn_fmt(&arr, "%s/%s", root, dp->path) < 0)
-				c_err_die(1, "c_dyn_fmt");
-			/* TODO: deal with errors in a better way */
-			switch (dp->info) {
-			case C_FSD:
-				if (c_nix_mkdir(c_arr_data(&arr), 0755) < 0 &&
-				    errno != C_EEXIST)
-					c_err_die(1, "c_nix_mkdir %s", s);
-				continue;
-			case C_FSDP:
-				c_nix_rmdir(dp->path);
-				continue;
-			case C_FSDNR:
-			case C_FSNS:
-			case C_FSERR:
-				continue;
-			default:
-				if (c_nix_rename(c_arr_data(&arr),
-				    dp->path) < 0)
-					c_err_die(1, "c_nix_rename %s <- %s",
-					    c_arr_data(&arr), dp->path);
-			}
-		}
-		c_dir_close(&dir);
-		c_nix_rmdir(c_arr_data(&tmpdir));
-
-		c_arr_trunc(&arr, 0, sizeof(uchar));
-		if (c_dyn_fmt(&arr, "%s/local/%s", dbdir, *argv) < 0)
-			c_err_die(1, "c_dyn_fmt");
-		if ((dest = c_nix_fdopen3(c_arr_data(&arr),
-		    C_OCREATE|C_OTRUNC|C_OWRITE, 0644)) < 0)
-			c_err_die(1, "c_nix_fdopen3 %s", c_arr_data(&arr));
-		if ((src = c_nix_fdopen2(file, C_OREAD)) < 0)
-			c_err_die(1, "c_nix_fdopen2 %s", file);
-		if (c_nix_fdcat(dest, src) < 0)
-			c_err_die(1, "c_nix_fdcat %s <- %s", dest, src);
-		c_nix_fdclose(dest);
-		c_nix_fdclose(src);
-	}
-	c_dyn_free(&arr);
-	c_dyn_free(&tmpdir);
 }
 
 static void
 pkgfetch(char **argv)
 {
 	ctype_arr arr;
-	ctype_stat st;
 	usize len, n;
+	ctype_status r;
 	char *s;
-
-	nolocal("fetch");
 
 	c_mem_set(&arr, sizeof(arr), 0);
 	for (; *argv; ++argv) {
-		c_ioq_fmt(ioq1, "%s: fetch...\n", *argv);
-		c_ioq_flush(ioq1);
+		c_ioq_fmt(ioq2, "%s: fetch...\n", *argv);
+		c_ioq_flush(ioq2);
 
+		file = getpathx(*argv);
 		c_arr_trunc(&arr, 0, sizeof(uchar));
-		if (c_dyn_fmt(&arr, "%s/%s/cache/", dbdir, dbflag) < 0)
-			c_err_die(1, "c_dyn_fmt");
+		r = c_dyn_fmt(&arr, "%s/%s/cache/", dbdir, dbflag);
+		if (r < 0) c_err_diex(1, "no memory");
 		len = c_arr_bytes(&arr);
 
-		file = getpath(*argv);
 		s = getkey("name");
-		if (c_dyn_fmt(&arr, "%s", s) < 0)
-			c_err_die(1, "c_dyn_fmt");
+		r = c_dyn_fmt(&arr, "%s", s);
+		if (r < 0) c_err_diex(1, "no memory");
 		s = getkey("version");
-		if (c_dyn_fmt(&arr, "#%s.vlz%c", s, 0) < 0)
-			c_err_die(1, "c_dyn_fmt");
+		r = c_dyn_fmt(&arr, "#%s.vlz%c", s, '\0');
+		if (r < 0) c_err_diex(1, "no memory");
 
 		s = c_arr_data(&arr);
-		if (c_nix_stat(&st, s) < 0) {
-			if (errno != C_ENOENT)
-				c_err_die(1, "c_nix_stat %s", s);
-		} else if (!dochecksum(s)) {
-			continue;
-		}
+		if (exist(s) && dochecksum(s)) continue;
 
 		n = c_arr_bytes(&arr);
-		if (c_dyn_fmt(&arr, "%s/%s/%s/%.*s",
-		    url, dbflag, arch, (n - len) - 1, s + len) < 0)
-			c_err_die(1, "c_dyn_fmt");
-
+		r = c_dyn_fmt(&arr, "%s/%s/%s/%.*s",
+		    url, dbflag, arch, (n - len) - 1, s + len);
+		if (r < 0) c_err_diex(1, "no memory");
 		s = c_arr_data(&arr);
 		dofetch(s, s+n);
-		/* TODO: deal with errors in a better way */
-		if (dochecksum(s)) c_std_exit(1);
+		if (!dochecksum(s)) c_err_diex(1, "file corrupted \"%s\"", s);
+	}
+	c_dyn_free(&arr);
+}
+
+static void
+pkgexplode(char **argv)
+{
+	ctype_arr arr;
+	ctype_status r;
+	char *s;
+
+	r = c_nix_chdir(root);
+	if (r < 0) c_err_die(1, "failed to change dir to \"%s\"", root);
+
+	c_mem_set(&arr, sizeof(arr), 0);
+	for (; *argv; ++argv) {
+		c_ioq_fmt(ioq2, "%s: explode...\n", *argv);
+		c_ioq_flush(ioq2);
+
+		file = getpathx(*argv);
+		c_arr_trunc(&arr, 0, sizeof(uchar));
+		r = c_dyn_fmt(&arr, "%s/%s/cache/", dbdir, dbflag);
+		if (r < 0) c_err_diex(1, "no memory");
+
+		s = getkey("name");
+		r = c_dyn_fmt(&arr, "%s", s);
+		if (r < 0) c_err_diex(1, "no memory");
+		s = getkey("version");
+		r = c_dyn_fmt(&arr, "#%s.vlz", s);
+		if (r < 0) c_err_diex(1, "no memory");
+
+		s = c_arr_data(&arr);
+		if (!exist(s))
+			c_err_diex(1,
+			    "package \"%s\" not found in \"%s\" cache",
+			    *argv, dbflag);
+
+		douncompress(s);
+
+		c_arr_trunc(&arr, 0, sizeof(uchar));
+		r = c_dyn_fmt(&arr, "%s/local/%s", dbdir, *argv);
+		if (r < 0) c_err_diex(1, "no memory");
+		copyfile(c_arr_data(&arr), file);
 	}
 	c_dyn_free(&arr);
 }
@@ -601,62 +474,51 @@ pkgfetch(char **argv)
 static void
 pkgadd(char **argv)
 {
+	ctype_kvtree t;
 	ctype_node *deps, *list;
-	usize len;
-	char *args[2];
+	usize n;
 
-
-	nolocal("add");
-
+	c_mem_set(&t, sizeof(t), 0);
 	list = nil;
-	for (; *argv; ++argv) xpush(&list, *argv);
+	for (; *argv; ++argv) xpush(&list, &t, *argv);
 
 	deps = nil;
-	solve_deps(&deps, list);
+	resolvedeps(&deps, &t, list);
+	c_adt_kvfree(&t, nil);
 	c_adt_ltpush(&list, deps);
 
-	len = c_ioq_fmt(ioq1,
+	n = c_ioq_fmt(ioq2,
 	    "The following packages are going to be installed:");
 	deps = list->next;
 	do {
-		len += c_ioq_fmt(ioq1, " %s", deps->p);
-		if (len > columns) {
-			len = 0;
-			c_ioq_put(ioq1, "\n");
+		n += c_ioq_fmt(ioq2, " %s", deps->p);
+		if (n > columns) {
+			n = 0;
+			c_ioq_put(ioq2, "\n");
 		}
 	} while ((deps = deps->next)->prev);
-	c_ioq_put(ioq1, "\n");
+	c_ioq_put(ioq2, "\n");
 
 	if (yflag) {
-		c_ioq_flush(ioq1);
+		c_ioq_flush(ioq2);
 	} else {
-		c_ioq_fmt(ioq1, "Do you want to continue? [Y/N] ");
-		c_ioq_flush(ioq1);
-		if (yesno()) c_err_diex(1, "Abort");
+		c_ioq_fmt(ioq2, "Do you want to continue? [Y/N] ");
+		c_ioq_flush(ioq2);
+		if (askconfirm()) c_err_diex(1, "Abort");
 	}
 
-	args[1] = nil;
-	deps = list->next;
-	do {
-		args[0] = deps->p;
-		pkgfetch(args);
-	} while ((deps = deps->next)->prev);
-
-	deps = list->next;
-	do {
-		args[0] = deps->p;
-		pkgexplode(args);
-	} while ((deps = deps->next)->prev);
-
-	while (list)
-		c_adt_lfree(c_adt_lpop(&list));
+	argv = argslist(list);
+	pkgfetch(argv);
+	pkgexplode(argv);
+	while (list) c_adt_lfree(c_adt_lpop(&list));
+	c_std_free(argv);
 }
 
 static void
 pkginfo(char **argv)
 {
 	for (; *argv; ++argv) {
-		file = getpath(*argv);
+		file = getpathx(*argv);
 		c_ioq_fmt(ioq1, "Name: %s\n", getkey("name"));
 		c_ioq_fmt(ioq1, "Version: %s\n", getkey("version"));
 		c_ioq_fmt(ioq1, "License: %s\n", getkey("license"));
@@ -669,8 +531,8 @@ static void
 pkglist(char **argv)
 {
 	for (; *argv; ++argv) {
-		file = getpath(*argv);
-		c_ioq_fmt(ioq1, "%s\n", gettag(tag));
+		file = getpathx(*argv);
+		c_ioq_fmt(ioq1, "%s\n", getmkey(tag));
 	}
 }
 
@@ -678,49 +540,92 @@ static void
 pkgupdate(char **argv)
 {
 	ctype_arr arr;
+	ctype_status r;
 	usize len;
 	char *s;
 
 	(void)argv;
 
-	c_ioq_fmt(ioq1, "populate remote...\n");
-	c_ioq_flush(ioq1);
+	c_ioq_fmt(ioq2, "populate remote...\n");
+	c_ioq_flush(ioq2);
 
 	c_mem_set(&arr, sizeof(arr), 0);
-	if (c_dyn_fmt(&arr, "%s/remote", dbdir) < 0)
-		c_err_die(1, "c_dyn_fmt");
-
+	if (c_dyn_fmt(&arr, "%s/remote", dbdir) < 0) c_err_diex(1, "no memory");
 	s = c_arr_data(&arr);
-	if (c_nix_chdir(s) < 0)
-		c_err_die(1, "c_nix_chdir %s", s);
+
+	r = c_nix_chdir(s);
+	if (r < 0) c_err_die(1, "failed to change dir to \"%s\"", s);
 
 	c_arr_trunc(&arr, 0, sizeof(uchar));
-	c_arr_fmt(&arr, "cache/remote.vlz%c", 0);
+	r = c_dyn_fmt(&arr, "cache/remote.vlz%c", '\0');
+	if (r < 0) c_err_diex(1, "no memory");
 	len = c_arr_bytes(&arr);
-
-	if (c_dyn_fmt(&arr, "%s/remote/%s/remote.vlz", url, arch) < 0)
-		c_err_die(1, "c_dyn_fmt");
-
+	r = c_dyn_fmt(&arr, "%s/remote/%s/remote.vlz", url, arch);
+	if (r < 0) c_err_diex(1, "no memory");
 	s = c_arr_data(&arr);
+
 	dofetch(s, s+len);
 	douncompress(s);
 
 	c_arr_trunc(&arr, 0, sizeof(uchar));
-	c_arr_fmt(&arr, "cache/chksum%c", 0);
+	c_arr_fmt(&arr, "cache/chksum%c", '\0');
 	len = c_arr_bytes(&arr);
 	c_arr_fmt(&arr, "%s/remote/%s/chksum", url, arch);
-
 	s = c_arr_data(&arr);
+
 	dofetch(s, s+len);
 
 	c_dyn_free(&arr);
+}
+
+/* main routines */
+static void
+start(void)
+{
+	ctype_arr arr;
+	usize len;
+	ctype_status r;
+	char *home;
+
+	if (!(c_sys_geteuid())) {
+		conf = "/etc/venus.cfg";
+		root = "/var/pkg";
+	} else {
+		if (!(home = c_std_getenv("XDG_CONFIG_HOME"))) {
+			home = c_std_getenv("HOME");
+			if (!home) c_err_diex(1, "missing HOME variable");
+			c_mem_set(&arr, sizeof(arr), 0);
+			r = c_dyn_fmt(&arr, "%s/.config", home);
+			if (r < 0) c_err_diex(1, "no memory");
+			c_dyn_shrink(&arr);
+			home = c_arr_data(&arr);
+		}
+		c_mem_set(&arr, sizeof(arr), 0);
+		r = c_dyn_fmt(&arr, "%s/venus/config%c", home, '\0');
+		if (r < 0) c_err_diex(1, "no memory");
+		len = c_arr_bytes(&arr);
+		r = c_dyn_fmt(&arr, "%s/venus/db", home);
+		if (r < 0) c_err_diex(1, "no memory");
+		c_dyn_shrink(&arr);
+		conf = c_arr_data(&arr); /* "memory leak" */
+		dbdir = conf + len;
+		c_std_free(home);
+	}
+	file = conf;
+	/* "memory leak" */
+	DUPKEY(arch);
+	DUPKEY(fetch);
+	DUPKEY(root);
+	DUPKEY(url);
+	DUPKEY(safeurl);
+	DUPKEY(uncompress);
 }
 
 static void
 usage(void)
 {
 	c_ioq_fmt(ioq2,
-	    "usage: %s [-LNR] -acdefi pkg [...]\n"
+	    "usage: %s [-LNR] -adefi pkg [...]\n"
 	    "       %s [-LNR] -l tag pkg [...]\n"
 	    "       %s -u\n",
 	    c_std_getprogname(), c_std_getprogname(), c_std_getprogname());
@@ -736,10 +641,10 @@ main(int argc, char **argv)
 	c_std_setprogname(argv[0]);
 	--argc, ++argv;
 
-	func = nil;
+	db = nil;
 	dbflag = nil;
-
-	while (c_std_getopt(argmain, argc, argv, "LNRacdefil:uy")) {
+	func = nil;
+	while (c_std_getopt(argmain, argc, argv, "LNRadefil:uy")) {
 		switch (argmain->opt) {
 		case 'L':
 			dbflag = "local";
@@ -753,10 +658,6 @@ main(int argc, char **argv)
 		case 'a':
 			db = "remote";
 			func = pkgadd;
-			break;
-		case 'c':
-			db = "local";
-			func = pkgcheck;
 			break;
 		case 'd':
 			db = "local";
@@ -799,15 +700,12 @@ main(int argc, char **argv)
 		c_std_exit(0);
 	}
 
-	if (!func || !argc)
-		usage();
+	if (!func || !argc) usage();
 
-	if (!dbflag)
-		dbflag = db;
+	tmp = c_std_getenv("COLUMNS");
+	if (tmp) columns = c_std_strtouvl(tmp, 0, 0, -1, nil, nil);
 
-	if ((tmp = c_std_getenv("COLUMNS")))
-		columns = c_std_strtouvl(tmp, 0, 0, -1, nil, nil);
-
+	if (!dbflag) dbflag = db;
 	func(argv);
 	c_ioq_flush(ioq1);
 	return 0;

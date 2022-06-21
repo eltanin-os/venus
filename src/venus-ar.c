@@ -1,16 +1,7 @@
 #include <tertium/cpu.h>
 #include <tertium/std.h>
 
-#define CSTRCMP(a, b) c_mem_cmp((a), sizeof((a)), (b))
-#define STRCMP(a, b) c_mem_cmp((a), sizeof((a)) - 1, (b))
-
-#define ROPTS C_OREAD
-#define RMODE 0
-#define WOPTS (C_OCREATE | C_OWRITE)
-#define WMODE C_DEFFILEMODE
-
 #define MAGIC "3EA81233"
-#define PATHSIZ(a) (((a) << 1) + 18)
 
 enum {
 	ZERO,
@@ -18,243 +9,297 @@ enum {
 	UNARCHIVE,
 };
 
-struct header {
-	u32int mode;
-	u32int namesize;
-	u64int size;
+struct head {
+	u32 mode;
+	u32 namesize;
+	u64 size;
 };
 
-/* fail functions */
-static ctype_fd
-eopen(char *s, uint opts, uint mode)
+static ctype_node *tmpfiles;
+
+/* atexit routines */
+static void
+cleantrash(void)
+{
+	ctype_node *p;
+	while ((p = c_adt_lpop(&tmpfiles))) {
+		c_nix_unlink(p->p);
+		c_adt_lfree(p);
+	}
+}
+
+static void
+trackfile(char *s, usize n)
+{
+	ctype_node *p;
+	p = c_adt_lnew(s, n);
+	if (c_adt_lpush(&tmpfiles, p) < 0) c_err_diex(1, "no memory");
+}
+
+/* archive routines */
+static void
+store32(ctype_ioq *p, u32 x)
+{
+	char tmp[4];
+	c_ioq_nput(p, c_uint_32pack(tmp, x), sizeof(tmp));
+}
+
+static void
+store64(ctype_ioq *p, u64 x)
+{
+	char tmp[8];
+	c_ioq_nput(p, c_uint_64pack(tmp, x), sizeof(tmp));
+}
+
+static void
+puthead(ctype_ioq *p, char *s, usize n, ctype_stat *stp)
+{
+	store32(p, stp->mode);
+	store32(p, n);
+	store64(p, stp->size);
+	c_ioq_nput(p, s, n);
+}
+
+static void
+putfile(ctype_ioq *p, char *s)
+{
+	ctype_status r;
+	r = c_ioq_putfile(p, s);
+	if (r < 0) c_err_die(1, "failed to copy file \"%s\"", s);
+}
+
+static void
+putsymlink(ctype_ioq *p, char *s, usize n)
+{
+	static ctype_arr arr; /* "memory leak" */
+	ctype_status r;
+	c_arr_trunc(&arr, 0, sizeof(uchar));
+	r = c_dyn_ready(&arr, n + 1, sizeof(uchar));
+	if (r < 0) c_err_diex(1, "no memory");
+	r = c_nix_readlink(c_arr_data(&arr), c_arr_total(&arr), s);
+	if (r < 0) c_err_die(1, "faile to read symlink \"%s\"", s);
+	c_ioq_nput(p, c_arr_data(&arr), n);
+}
+
+static char **
+filelist(void)
+{
+	ctype_arr arr;
+	ctype_status r;
+	usize n;
+	char **args;
+	char *s;
+	/* get lines */
+	s = n = 0;
+	c_mem_set(&arr, sizeof(arr), 0);
+	while ((r = c_ioq_getln(ioq0, &arr)) > 0) ++n;
+	if (r < 0) c_err_die(1, "failed to read stdin");
+	c_dyn_shrink(&arr);
+	s = c_arr_data(&arr);
+	/* split lines */
+	args = c_std_alloc(n + 1, sizeof(void *));
+	args[n] = nil;
+	while (n) {
+		args[--n] = s;
+		s = c_str_chr(s, -1, '\n');
+		*s++ = 0;
+	}
+	return args;
+}
+
+static void
+archivefd(ctype_ioq *p, char **argv)
+{
+	ctype_dir dir;
+	ctype_dent *ep;
+	ctype_status r;
+
+	c_ioq_put(p, MAGIC);
+	if (!argv) argv = filelist();
+	r = c_dir_open(&dir, argv, 0, nil);
+	if (r < 0) c_err_die(1, "failed to read the given args");
+	while ((ep = c_dir_read(&dir))) {
+		switch (ep->info) {
+		case C_DIR_FSD:
+		case C_DIR_FSDC:
+		case C_DIR_FSDOT:
+		case C_DIR_FSDP:
+		case C_DIR_FSINT:
+			continue;
+		case C_DIR_FSDEF:
+		case C_DIR_FSDNR:
+		case C_DIR_FSERR:
+		case C_DIR_FSNS:
+			continue;
+		}
+		puthead(p, ep->path, ep->len, ep->stp);
+		switch (ep->info) {
+		case C_DIR_FSF:
+			putfile(p, ep->path);
+			break;
+		case C_DIR_FSSL:
+		case C_DIR_FSSLN:
+			putsymlink(p, ep->path, ep->stp->size);
+			break;
+		}
+	}
+	c_dir_close(&dir);
+	if (c_ioq_flush(p) < 0) c_err_die(1, "failed to flush file buffer");
+	c_std_free(*argv);
+	c_std_free(argv);
+}
+
+static void
+archive(char *file, char **argv)
+{
+	ctype_ioq ioq;
+	ctype_fd fd;
+	ctype_status r;
+	char buf[C_IOQ_BSIZ];
+	char tmp[] = "tmpvenus.XXXXXXXXX";
+
+	if (!file) {
+		archivefd(ioq1, argv);
+		return;
+	}
+
+	fd = c_nix_mktemp5(tmp, sizeof(tmp), 0, 0, C_NIX_DEFFILEMODE);
+	if (fd < 0) c_err_die(1, "failed to obtain temporary file");
+	trackfile(tmp, sizeof(tmp));
+	c_ioq_init(&ioq, fd, buf, sizeof(buf), &c_nix_fdwrite);
+
+	archivefd(&ioq, argv);
+	c_nix_fdclose(fd);
+
+	r = c_nix_rename(file, tmp);
+	if (r < 0) c_err_die(1, "failed to replace file \"%s\"", file);
+}
+
+/* unarchive routines */
+static void
+createreg(ctype_ioq *p, char *s, usize len, usize n, uint mode)
 {
 	ctype_fd fd;
+	size r;
 
-	if ((fd = c_sys_open(s, opts, mode)) < 0)
-		c_err_die(1, "c_sys_open %s", s);
-	return fd;
+	fd = c_nix_mktemp(s, len);
+	if (fd < 0) c_err_die(1, "failed to obtain temporary file");
+	trackfile(s, len);
+
+	while (n) {
+		r = c_ioq_feed(p);
+		if (r <= 0) c_err_diex(1, "incomplete or broken file");
+		if (n < (usize)r) r = n;
+		r = c_nix_allrw(c_nix_fdwrite, fd, c_ioq_peek(p), r);
+		if (r < 0) c_err_die(1, "failed to extract file \"%s\"", s);
+		n -= r;
+		c_ioq_seek(p, r);
+	}
+
+	r = c_nix_fdchmod(fd, mode);
+	if (r < 0) c_err_diex(1, "failed to set file mode \"%s\"", s);
+	c_nix_fdclose(fd);
 }
 
 static void
 getall(ctype_ioq *p, char *s, usize n)
 {
 	size r;
-
-	if ((r = c_ioq_get(p, s, n)) < 0)
-		c_err_die(1, "c_ioq_get");
-	if ((usize)r != n)
-		c_err_diex(1, "file incomplete");
-}
-
-/* archive functions */
-static void
-store32(ctype_ioq *p, u32int x)
-{
-	char tmp[4];
-	c_ioq_nput(p, c_uint_32pack(tmp, x), sizeof(x));
+	r = c_ioq_get(p, s, n);
+	if (r < 0) c_err_die(1, "failed to read file");
+	if (r < (size)n) c_err_diex(1, "incomplete file");
 }
 
 static void
-store64(ctype_ioq *p, u64int x)
+createsln(ctype_ioq *p, char *s, usize len, usize n)
 {
-	char tmp[8];
-	c_ioq_nput(p, c_uint_64pack(tmp, x), sizeof(x));
-}
-
-static void
-putfile(ctype_ioq *ioq, ctype_arr *ap, char *s, usize len, ctype_stat *stp)
-{
-	store32(ioq, stp->mode);
-	store32(ioq, len);
-	store64(ioq, stp->size);
-	c_ioq_nput(ioq, s, len);
-	if (C_ISREG(stp->mode)) {
-		if (c_ioq_putfile(ioq, s) < 0)
-			c_err_diex(1, "c_ioq_putfile %s", s);
-	} else if (C_ISLNK(stp->mode)) {
-		c_arr_trunc(ap, 0, sizeof(uchar));
-		if (c_dyn_ready(ap, stp->size + 1, sizeof(uchar)) < 0)
-			c_err_die(1, "c_dyn_ready");
-		if (c_sys_readlink(s, c_arr_data(ap), c_arr_total(ap)) < 0)
-			c_err_die(1, "c_sys_readlink");
-		c_ioq_nput(ioq, c_arr_data(ap), stp->size);
-	}
-}
-
-ctype_status
-archivefd(ctype_fd afd, char **av)
-{
-	ctype_stat st;
-	ctype_dir dir;
-	ctype_dent *p;
-	ctype_ioq ioq;
-	ctype_arr arr, line;
-	usize len;
-	char *s;
-	char buf[C_BIOSIZ];
-
-	c_ioq_init(&ioq, afd, buf, sizeof(buf), &c_sys_write);
-	c_ioq_put(&ioq, MAGIC);
-	c_mem_set(&arr, sizeof(arr), 0);
-	if (!*av) {
-		c_mem_set(&line, sizeof(line), 0);
-		while (c_ioq_getln(ioq0, &line) > 0) {
-			s = c_arr_data(&line);
-			len = c_arr_bytes(&line);
-			s[--len] = 0;
-			if (c_nix_lstat(&st, s) < 0)
-				c_err_die(1, "c_nix_lstat %s", s);
-			putfile(&ioq, &arr, s, len, &st);
-			c_arr_trunc(&line, 0, sizeof(uchar));
-		}
-		c_dyn_free(&line);
-	} else {
-		if (c_dir_open(&dir, av, 0, nil) < 0)
-			c_err_die(1, "c_dir_open");
-		while ((p = c_dir_read(&dir))) {
-			switch (p->info) {
-			case C_FSD:
-			case C_FSDP:
-			case C_FSNS:
-			case C_FSERR:
-			case C_FSDEF:
-				continue;
-			}
-			putfile(&ioq, &arr, p->path, p->len, p->stp);
-		}
-		c_dir_close(&dir);
-	}
-	c_dyn_free(&arr);
-	c_ioq_flush(&ioq);
-	return 0;
-}
-
-ctype_status
-archive(char *file, char **av)
-{
+	static ctype_arr arr; /* "memory leak" */
 	ctype_status r;
-	ctype_fd fd;
-
-	if (!CSTRCMP("<stdin>", file))
-		return archivefd(C_FD1, av);
-
-	fd = eopen(file, WOPTS, WMODE);
-	r = archivefd(fd, av);
-	c_sys_close(fd);
-	return r;
+	c_arr_trunc(&arr, 0, sizeof(uchar));
+	r = c_dyn_ready(&arr, n, sizeof(uchar));
+	if (r < 0) c_err_diex(1, "no memory");
+	getall(p, c_arr_data(&arr), n);
+	r = c_nix_mklntemp(s, len, c_arr_data(&arr));
+	if (r < 0) c_err_die(1, "failed to obtain temporary file");
+	trackfile(s, len);
 }
 
-ctype_status
-unarchivefd(ctype_fd afd)
+static void
+unarchivefd(ctype_ioq *p)
 {
-	struct header h;
-	ctype_arr arr, dest;
-	ctype_ioq ioq;
-	ctype_fd fd;
-	size r;
-	char *d, *s, *tmp;
-	char buf[C_BIOSIZ];
-	char hb[16];
+	ctype_arr arr, tmp;
+	struct head h;
+	ctype_status r;
+	char buf[sizeof(h)];
+	char *s, *d;
 
-	c_ioq_init(&ioq, afd, buf, sizeof(buf), &c_sys_read);
-	getall(&ioq, hb, sizeof(MAGIC) - 1);
-	if (STRCMP(MAGIC, hb))
-		c_err_diex(1, "unknown format");
+	getall(p, buf, sizeof(MAGIC) - 1);
+	r = c_mem_cmp(MAGIC, sizeof(MAGIC) - 1, buf);
+	if (r != 0) c_err_diex(1, "not a valid venus archive");
 
 	c_mem_set(&arr, sizeof(arr), 0);
-	c_mem_set(&dest, sizeof(arr), 0);
+	c_mem_set(&tmp, sizeof(tmp), 0);
 	for (;;) {
-		if (!c_ioq_feed(&ioq))
-			break;
-
-		getall(&ioq, hb, sizeof(hb));
-		s = hb;
+		if (c_ioq_feed(p) <= 0) break;
+		/* header */
+		getall(p, buf, sizeof(buf));
+		s = buf;
 		h.mode = c_uint_32unpack(s);
 		s += sizeof(h.mode);
 		h.namesize = c_uint_32unpack(s);
 		s += sizeof(h.namesize);
-		h.size = c_uint_64unpack(s);
-
+		h.size = c_uint_32unpack(s);
+		/* file name */
 		c_arr_trunc(&arr, 0, sizeof(uchar));
-		if (c_dyn_ready(&arr, h.namesize, sizeof(uchar)) < 0)
-			c_err_die(1, "c_dyn_ready");
-
+		s = c_dyn_alloc(&arr, h.namesize, sizeof(uchar));
+		if (!s) c_err_diex(1, "no memory");
 		s = c_arr_data(&arr);
-		getall(&ioq, s, h.namesize);
+		getall(p, s, h.namesize);
 		s[h.namesize] = 0;
-		/* assume no trailing slashes */
-		if ((tmp = c_mem_rchr(s, h.namesize - 1, '/'))) {
-			*tmp = 0;
-			c_nix_mkpath(s, 0755, 0755);
-			*tmp = '/';
+		/* tmp file name */
+		c_arr_trunc(&tmp, 0, sizeof(uchar));
+		r = c_dyn_tofrom(&tmp, &arr);
+		if (r < 0) c_err_diex(1, "no memory");
+		d = c_gen_dirname(c_arr_data(&tmp));
+		c_arr_trunc(&tmp, c_str_len(d, -1), sizeof(uchar));
+		c_nix_mkpath(d, 0755, 0755);
+		r = c_dyn_fmt(&tmp, "/tmpvenus.XXXXXXXXX");
+		if (r < 0) c_err_diex(1, "no memory");
+		/* data */
+		d = c_arr_data(&tmp);
+		switch (h.mode & C_NIX_IFMT) {
+		case C_NIX_IFLNK:
+			createsln(p, d, c_arr_bytes(&tmp), h.size);
+			break;
+		case C_NIX_IFREG:
+			createreg(p, d, c_arr_bytes(&tmp), h.size, h.mode);
+			break;
+		default:
+			break;
 		}
-
-		c_arr_trunc(&dest, 0, sizeof(uchar));
-		if (c_dyn_ready(&dest, PATHSIZ(h.namesize), sizeof(uchar)) < 0)
-			c_err_die(1, "c_dyn_ready");
-
-		d = c_arr_data(&dest);
-		if (c_mem_chr(s, h.namesize, '/')) {
-			c_gen_dirname(c_mem_cpy(d, h.namesize + 1, s));
-			c_arr_fmt(&dest, "%s/", d);
-		}
-		c_arr_fmt(&dest, "VENUS@XXXXXXXXX");
-		r = c_arr_bytes(&dest);
-		s = c_mem_cpy(d + r + 1, h.namesize + 1, s);
-		if (C_ISLNK(h.mode)) {
-			c_arr_trunc(&arr, 0, sizeof(uchar));
-			if (c_dyn_ready(&arr, h.size, sizeof(uchar)) < 0)
-				c_err_die(1, "c_dyn_ready");
-			getall(&ioq, c_arr_data(&arr), h.size);
-			*((char *)c_arr_data(&arr) + h.size) = 0;
-			for (;;) {
-				c_rand_name(d + (r - 9), 9);
-				if (c_sys_symlink(c_arr_data(&arr), d) < 0) {
-					if (errno == C_EEXIST)
-						continue;
-					c_err_die(1, "c_sys_symlink %s %s",
-					    c_arr_data(&arr), d);
-				}
-				break;
-			}
-		} else {
-			if ((fd = c_nix_mktemp(d, r, 0)) < 0)
-				c_err_die(1, "c_nix_mktemp %s", d);
-			while (h.size) {
-				if ((r = c_ioq_feed(&ioq)) <= 0)
-					c_err_diex(1, "incomplete file");
-				r = C_MIN(r, (size)h.size);
-				if (c_nix_allrw(c_sys_write, fd,
-				    c_ioq_peek(&ioq), r) < 0)
-					c_err_die(1, "c_nix_allrw");
-				h.size -= r;
-				c_ioq_seek(&ioq, r);
-			}
-			if (c_sys_fchmod(fd, h.mode) < 0)
-				c_err_die(1, "c_sys_fchmod");
-			c_sys_close(fd);
-		}
-		if (c_sys_rename(d, s) < 0)
-			c_err_die(1, "c_sys_rename %s %s", d, s);
+		r = c_nix_rename(s, c_arr_data(&tmp));
+		c_nix_unlink(c_arr_data(&tmp));
+		if (r < 0) c_err_die(1, "failed to replace file \"%s\"", s);
 	}
 	c_dyn_free(&arr);
-	c_dyn_free(&dest);
-	return 0;
+	c_dyn_free(&tmp);
 }
 
-ctype_status
+static void
 unarchive(char *file)
 {
-	ctype_status r;
+	ctype_ioq ioq;
 	ctype_fd fd;
-
-	if (!CSTRCMP("<stdin>", file))
-		return unarchivefd(C_FD0);
-
-	fd = eopen(file, ROPTS, RMODE);
-	r = unarchivefd(fd);
-	c_sys_close(fd);
-	return r;
+	char buf[C_IOQ_BSIZ];
+	if (!file) {
+		unarchivefd(ioq0);
+		return;
+	}
+	fd = c_nix_fdopen2(file, C_NIX_OREAD);
+	if (fd < 0) c_err_die(1, "failed to open file \"%s\"", file);
+	c_ioq_init(&ioq, fd, buf, sizeof(buf), &c_nix_fdread);
+	unarchivefd(&ioq);
+	c_nix_fdclose(fd);
 }
 
 static void
@@ -270,25 +315,25 @@ usage(void)
 ctype_status
 main(int argc, char **argv)
 {
-	int op;
+	int mode;
 	char *file;
 
 	c_std_setprogname(argv[0]);
 	--argc, ++argv;
 
-	op = ZERO;
-	file = "<stdin>";
-
+	mode = 0;
+	file = nil;
 	while (c_std_getopt(argmain, argc, argv, "cf:x")) {
 		switch (argmain->opt) {
 		case 'c':
-			op = ARCHIVE;
+			mode = ARCHIVE;
 			break;
 		case 'f':
+			if (C_STD_ISDASH(argmain->arg)) argmain->arg = nil;
 			file = argmain->arg;
 			break;
 		case 'x':
-			op = UNARCHIVE;
+			mode = UNARCHIVE;
 			break;
 		default:
 			usage();
@@ -297,15 +342,18 @@ main(int argc, char **argv)
 	argc -= argmain->idx;
 	argv += argmain->idx;
 
-	switch (op) {
+	switch (mode) {
 	case ARCHIVE:
-		return archive(file, argv);
+		if (!argc) argv = nil;
+		archive(file, argv);
+		break;
 	case UNARCHIVE:
 		if (argc) usage();
-		return unarchive(file);
+		c_std_atexit(cleantrash);
+		unarchive(file);
+		break;
 	default:
 		usage();
 	}
-	/* NOT REACHED */
 	return 0;
 }

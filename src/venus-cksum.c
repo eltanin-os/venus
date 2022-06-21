@@ -1,7 +1,49 @@
 #include <tertium/cpu.h>
 #include <tertium/std.h>
 
-static char *slash[] = { "-", nil };
+static ctype_status
+fletcher32(char **argv)
+{
+	ctype_hst h;
+	ctype_status r;
+	char buf[C_HSH_H32DIG];
+	r = 0;
+	for (; *argv; ++argv) {
+		if (C_STD_ISDASH(*argv)) *argv = "<stdin>";
+		c_hsh_fletcher32->init(&h);
+		if (c_hsh_putfile(&h, c_hsh_fletcher32, *argv) < 0) {
+			r = c_err_warn("failed to hash file \"%s\"", *argv);
+			continue;
+		}
+		c_hsh_fletcher32->end(&h, buf);
+		c_ioq_fmt(ioq1, "%s:%x\n", *argv, c_uint_32unpack(buf));
+	}
+	return r;
+}
+
+static ctype_status
+whirlpool(char **argv)
+{
+	ctype_hst h;
+	int i;
+	ctype_status r;
+	char buf[C_HSH_WHIRLPOOLDIG];
+	r = 0;
+	for (; *argv; ++argv) {
+		if (C_STD_ISDASH(*argv)) *argv = "<stdin>";
+		c_hsh_whirlpool->init(&h);
+		if (c_hsh_putfile(&h, c_hsh_whirlpool, *argv) < 0) {
+			r = c_err_warn("failed to hash file \"%s\"", *argv);
+			continue;
+		}
+		c_hsh_whirlpool->end(&h, buf);
+		c_ioq_fmt(ioq1, "%s:", *argv);
+		for (i = 0; i < (int)sizeof(buf); ++i)
+			c_ioq_fmt(ioq1, "%02x", (uchar)buf[i]);
+		c_ioq_put(ioq1, "\n");
+	}
+	return r;
+}
 
 static void
 usage(void)
@@ -13,23 +55,18 @@ usage(void)
 ctype_status
 main(int argc, char **argv)
 {
-	ctype_hst hs;
-	ctype_hmd *md;
 	ctype_status r;
-	int i, len;
-	char buf[C_HWHIRLPOOL_DIGEST];
+	ctype_status (*func)(char **);
+	char *args[] = { "-", nil };
 
 	c_std_setprogname(argv[0]);
 	--argc, ++argv;
 
-	md = c_hsh_fletcher32;
-	len = C_H32GEN_DIGEST;
-
+	func = fletcher32;
 	while (c_std_getopt(argmain, argc, argv, "w")) {
 		switch (argmain->opt) {
 		case 'w':
-			md = c_hsh_whirlpool;
-			len = C_HWHIRLPOOL_DIGEST;
+			func = whirlpool;
 			break;
 		default:
 			usage();
@@ -37,25 +74,8 @@ main(int argc, char **argv)
 	}
 	argc -= argmain->idx;
 	argv += argmain->idx;
-
-	if (!argc)
-		argv = slash;
-
-	r = 0;
-	for (; *argv; ++argv) {
-		if (C_ISDASH(*argv))
-			*argv = "<stdin>";
-		md->init(&hs);
-		if (c_hsh_putfile(&hs, md, *argv) < 0) {
-			r = c_err_warn("c_hsh_putfile %s", *argv);
-			continue;
-		}
-		md->end(&hs, buf);
-		for (i = 0; i < len; ++i)
-			c_ioq_fmt(ioq1, "%02x", (uchar)buf[i]);
-		c_ioq_fmt(ioq1, " %s", *argv);
-		c_ioq_put(ioq1, "\n");
-	}
-	c_ioq_flush(ioq1);
+	if (!argc) argv = args;
+	r = func(argv);
+	if (c_ioq_flush(ioq1) < 0) c_err_die(1, "failed to flush stdout");
 	return r;
 }
