@@ -325,18 +325,6 @@ xpush(ctype_node **p, ctype_kvtree *t, char *s)
 	if (r < 0) c_err_diex(1, "no memory");
 }
 
-static char *
-alternative(char *s)
-{
-	static ctype_arr arr; /* "memory leak" */
-
-	if (getpath(dbdir, s)) return s;
-
-	c_arr_trunc(&arr, 0, sizeof(uchar));
-	file = getpathx("alternatives");
-	split(&arr, s);
-}
-
 static void
 resolvedeps(ctype_node **list, ctype_kvtree *t, ctype_node *deps)
 {
