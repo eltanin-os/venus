@@ -61,11 +61,12 @@ initconf(struct conf *c, ctype_fd fd)
 		state = machine(c, state, c_arr_data(&arr), c_arr_bytes(&arr));
 		c_arr_trunc(&arr, 0, sizeof(uchar));
 	}
+	if (state) c_err_diex(1, "bad formatted file");
 	if (r < 0) c_err_die(1, "failed to read file");
 }
 
 static char *
-expand(char *value)
+expand(char *k, char *value)
 {
 	ctype_arr arr;
 	ctype_status r;
@@ -92,6 +93,7 @@ expand(char *value)
 		for (; *p && c_utf8_isalnum(*p); ++p) ;
 		if (p == s) { ++s; continue; }
 		/* get key */
+		if (!c_str_cmp(k, -1, s+1)) { ++s; continue; }
 		tmp = *p; *p = 0;
 		v = c_adt_kvget(&conf.s, s+1);
 		*p = tmp;
@@ -110,15 +112,16 @@ expand(char *value)
 	c_arr_trunc(&arr, s - value, sizeof(uchar));
 
 	c_dyn_shrink(&arr);
-	c_std_free(value);
 	return c_arr_data(&arr);
 }
 
 static void
 skeys(char *k, void *v)
 {
-	if (!v || !(v = expand(v))) return;
-	c_adt_kvadd(&conf.s, k, v);
+	char *nv;
+	if (!v || !(nv = expand(k, v))) return;
+	c_std_free(v);
+	c_adt_kvadd(&conf.s, k, nv);
 }
 
 static void
@@ -131,7 +134,7 @@ mkeys(char *k, void *v)
 
 	wp = ((ctype_node *)v)->next;
 	do {
-		if (!(v = expand(wp->p))) continue;
+		if (!(v = expand(k, wp->p))) continue;
 		wp->p = v;
 	} while ((wp = wp->next)->prev);
 }
