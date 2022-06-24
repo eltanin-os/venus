@@ -576,8 +576,8 @@ start(void)
 	char *home;
 
 	if (!(c_sys_geteuid())) {
-		conf = "/etc/venus.cfg";
-		root = "/var/pkg";
+		conf = "/etc/venus.conf";
+		dbdir = "/var/pkg";
 	} else {
 		if (!(home = c_std_getenv("XDG_CONFIG_HOME"))) {
 			home = c_std_getenv("HOME");
@@ -589,7 +589,7 @@ start(void)
 			home = c_arr_data(&arr);
 		}
 		c_mem_set(&arr, sizeof(arr), 0);
-		r = c_dyn_fmt(&arr, "%s/venus/config%c", home, '\0');
+		r = c_dyn_fmt(&arr, "%s/venus/venus.conf%c", home, '\0');
 		if (r < 0) c_err_diex(1, "no memory");
 		len = c_arr_bytes(&arr);
 		r = c_dyn_fmt(&arr, "%s/venus/db", home);
@@ -682,18 +682,20 @@ main(int argc, char **argv)
 	argc -= argmain->idx;
 	argv += argmain->idx;
 
+	if (!dbflag) dbflag = db;
 	start();
 	if (func == pkgupdate) {
 		func(nil);
 		c_std_exit(0);
+	} else if (func) {
+		if (!argc) usage();
+	} else {
+		usage();
 	}
-
-	if (!func || !argc) usage();
 
 	tmp = c_std_getenv("COLUMNS");
 	if (tmp) columns = c_std_strtouvl(tmp, 0, 0, -1, nil, nil);
 
-	if (!dbflag) dbflag = db;
 	func(argv);
 	c_ioq_flush(ioq1);
 	return 0;
