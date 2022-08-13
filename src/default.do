@@ -1,4 +1,7 @@
-#!/bin/rc -e
-if (~ $1 *.c) exit
-redo-ifchange $2.c.o $LIBS
-$CC $LDFLAGS -o $3 $2.c.o $LIBS -ltertium
+#!/bin/execlineb -S3
+multisubstitute {
+	importas -D "cc" CC CC
+	importas -sD "" LDFLAGS LDFLAGS
+}
+foreground { redo-ifchange ${2}.c.o }
+$CC $LDFLAGS -o $3 ${2}.c.o -ltertium
