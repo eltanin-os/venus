@@ -208,10 +208,11 @@ main(int argc, char **argv)
 	c_adt_kvtraverse(&conf.s, skeys);
 	c_adt_kvtraverse(&conf.m, mkeys);
 	if (mode) {
-		if ((s = c_adt_kvget(&conf.m, *argv))) printlist((void *)s);
+		if (!(s = c_adt_kvget(&conf.m, *argv))) return 1;
+		printlist((void *)s);
 	} else {
-		s = c_adt_kvget(&conf.s, *argv);
-		if (s) c_ioq_fmt(ioq1, "%s\n", s);
+		if (!(s = c_adt_kvget(&conf.s, *argv))) return 1;
+		c_ioq_fmt(ioq1, "%s\n", s);
 	}
 	c_adt_kvfree(&conf.s, freeobj);
 	c_adt_kvfree(&conf.m, freelist);
