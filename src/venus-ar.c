@@ -107,6 +107,15 @@ filelist(void)
 	return args;
 }
 
+static int
+sort(void *va, void *vb)
+{
+	ctype_dent *a, *b;
+	a = va;
+	b = vb;
+	return b->stp->size - a->stp->size;
+}
+
 static void
 archivefd(ctype_ioq *p, char **argv)
 {
@@ -116,7 +125,7 @@ archivefd(ctype_ioq *p, char **argv)
 
 	c_ioq_put(p, MAGIC);
 	if (!argv) argv = filelist();
-	r = c_dir_open(&dir, argv, 0, nil);
+	r = c_dir_open(&dir, argv, 0, &sort);
 	if (r < 0) c_err_die(1, "failed to read the given args");
 	while ((ep = c_dir_read(&dir))) {
 		switch (ep->info) {
