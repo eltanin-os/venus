@@ -16,7 +16,7 @@ ifelse { test "${1}" = "clean" } {
 	rm -f $targets
 }
 ifelse { test "${1}" = "install" } {
-	foregroud { redo-ifchange all }
+	foreground { redo-ifchange all }
 	foreground { install -dm "${DESTDIR}/${BINDIR}" }
 	foreground { install -dm "${DESTDIR}/${MANDIR}/man1" }
 	foreground { install -cm 755 $PROGS "${DESTDIR}/${BINDIR}" }
