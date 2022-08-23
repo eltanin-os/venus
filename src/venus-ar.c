@@ -90,7 +90,8 @@ filelist(void)
 	char **args;
 	char *s;
 	/* get lines */
-	s = n = 0;
+	s = 0;
+	n = 0;
 	c_mem_set(&arr, sizeof(arr), 0);
 	while ((r = c_ioq_getln(ioq0, &arr)) > 0) ++n;
 	if (r < 0) c_err_die(1, "failed to read stdin");
