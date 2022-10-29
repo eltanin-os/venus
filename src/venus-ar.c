@@ -225,11 +225,14 @@ createsln(ctype_ioq *p, char *s, usize len, usize n)
 {
 	static ctype_arr arr; /* "memory leak" */
 	ctype_status r;
+	char *target;
 	c_arr_trunc(&arr, 0, sizeof(uchar));
 	r = c_dyn_ready(&arr, n, sizeof(uchar));
 	if (r < 0) c_err_diex(1, "no memory");
-	getall(p, c_arr_data(&arr), n);
-	r = c_nix_mklntemp(s, len, c_arr_data(&arr));
+	target = c_arr_data(&arr);
+	getall(p, target, n);
+	target[n] = 0;
+	r = c_nix_mklntemp(s, len, target);
 	if (r < 0) c_err_die(1, "failed to obtain temporary file");
 	trackfile(s, len);
 }
