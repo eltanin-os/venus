@@ -21,10 +21,11 @@ case -- $1 {
 	rm -f $targets
 }
 "install" {
-	foreground { redo-ifchange all }
-	foreground { install -dm 755 "${DESTDIR}${PREFIX}${BINDIR}" }
-	foreground { install -dm 755 "${DESTDIR}${PREFIX}${MANDIR}/man1" }
-	foreground { install -cm 755 $PROGS "${DESTDIR}${PREFIX}/${BINDIR}" }
+	if { redo-ifchange all }
+	if { cp -R pm "${DESTDIR}${PREFIX}/venus-store" }
+	if { install -dm 755 "${DESTDIR}${PREFIX}${BINDIR}" }
+	if { install -dm 755 "${DESTDIR}${PREFIX}${MANDIR}/man1" }
+	if { install -cm 755 $PROGS "${DESTDIR}${PREFIX}/${BINDIR}" }
 	install -cm 644 $MANPAGES "${DESTDIR}${PREFIX}${MANDIR}/man1"
 }
 }

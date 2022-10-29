@@ -1,0 +1,46 @@
+#!/bin/execlineb
+elgetopt "c:dhk:t:"
+multisubstitute {
+	importas -uD "0" ELGETOPT_c ELGETOPT_c
+	importas -uD "0" ELGETOPT_d ELGETOPT_d
+	importas -uD "0" ELGETOPT_h ELGETOPT_h
+	importas -uD "0" ELGETOPT_k ELGETOPT_k
+	importas -uD "0" ELGETOPT_t ELGETOPT_t
+}
+elgetpositionals
+emptyenv -Po
+backtick file {
+	backtick -Ex cdir { dirname $0 } cd $cdir
+	getcwd PWD
+	multisubstitute {
+		elglob repositories "*"
+		importas -iu PWD PWD
+	}
+	forx -Ex 0 repo { $repositories }
+	if { test -e "${repo}/${1}" }
+	echo ${PWD}/${repo}/${1}
+}
+importas -iu file file
+ifelse -Xn { test "0" = "${ELGETOPT_c}" } {
+	backtick -Ex dir { dirname $file }
+	venus-conf $ELGETOPT_c ${dir}/repo.conf
+}
+ifelse -Xn { test "0" = "${ELGETOPT_d}" } {
+	dirname $file
+}
+ifelse -Xn { test "0" = "${ELGETOPT_h}" } {
+	backtick dir { dirname $file }
+	backtick version { venus-conf version $file }
+	multisubstitute {
+		importas -iu dir dir
+		importas -iu version version
+	}
+	venus-conf ${1}#${version}.pkg ${dir}/chksum
+}
+ifelse -Xn { test "0" = "${ELGETOPT_k}" } {
+	venus-conf ${ELGETOPT_k} $file
+}
+ifelse -Xn { test "0" = "${ELGETOPT_t}" } {
+	venus-conf -t ${ELGETOPT_t} $file
+}
+echo $file
