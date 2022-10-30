@@ -1,0 +1,46 @@
+.Dd $Mdocdate: October 30 2022 $
+.Dt VENUS-CONF 5
+.Os
+.Sh NAME
+.Nm venus-conf
+.Nd venus config file
+.Sh DESCRIPTION
+The venus config files are just flat files with two kind of keys
+single-value and multi-value.
+.Pp
+Single value variables are declared as:
+.Dl variable:value
+.Pp
+It can be referred in any order in the following way:
+.Bd -literal -offset indent -compact
+key1:$key3
+key2:$key1
+key3:hello
+.Ed
+.Pp
+Multiple value variables are declared as:
+.Bd -literal -offset indent -compact
+variable{
+value
+}
+.Ed
+.Pp
+It can be declared in a recursive manner:
+.Bd -literal -offset indent -compact
+users{
+  user1{
+    name:user1
+    home:/home/user1
+    id:333
+  }
+  user2{
+    name:user2
+    home:/home/user2
+    id:666
+  }
+}
+.Ed
+.Pp
+The variables must be declared one per line.
+.Sh SEE ALSO
+.Xr venus-conf 1
