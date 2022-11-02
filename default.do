@@ -22,11 +22,13 @@ case -- $1 {
 }
 "install" {
 	if { redo-ifchange all }
-	if { cp -R pm "${DESTDIR}${PREFIX}/venus-store" }
 	if { install -dm 755 "${DESTDIR}${PREFIX}${BINDIR}" }
 	if { install -dm 755 "${DESTDIR}${PREFIX}${MANDIR}/man1" }
 	if { install -cm 755 $PROGS "${DESTDIR}${PREFIX}/${BINDIR}" }
 	install -cm 644 $MANPAGES "${DESTDIR}${PREFIX}${MANDIR}/man1"
+}
+"install-store" {
+	cp -R pm "${DESTDIR}${PREFIX}/venus-store"
 }
 }
 foreground {
