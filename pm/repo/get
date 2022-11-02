@@ -13,7 +13,7 @@ backtick file {
 	backtick -Ex cdir { dirname $0 } cd $cdir
 	getcwd PWD
 	multisubstitute {
-		elglob repositories "*"
+		elglob -s repositories "*"
 		importas -iu PWD PWD
 	}
 	forx -Ex 0 repo { $repositories }
