@@ -3,7 +3,7 @@
 if { redo-always }
 elglob repositories "*"
 forx -Ep repo { $repositories }
-if { test -d "${repo}" }
+if { test -f "${repo}/repo.conf" }
 cd $repo
 backtick arch { uname -m }
 backtick safeurl { venus-conf safeurl repo.conf }
