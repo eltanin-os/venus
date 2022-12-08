@@ -15,14 +15,19 @@ ifelse -Xn { test "${1}" = "${name}" }  {
 	if { redo-ifchange $name }
 	ln -s $name $3
 }
-if { redo-ifchange ../cache/${1}#${version} }
-if { ln -s ../cache/${1}#${version} $3 }
+backtick -Ex hash { ../repo/get -h $name }
+define PKGDIR "../cache/${hash}.${1}#${version}"
+export VENUS_CUR_PKGNAME "${name}"
+if { redo-ifchange $PKGDIR }
+if { ln -s $PKGDIR $3 }
 getcwd -E PWD
 cd $3
 find . ! -type d -exec
     define file "{}"
     backtick -Ex dir { dirname $file }
     if { mkdir -p ../../root/${dir} }
+    export VENUS_CUR_DIR "${dir}"
+    export VENUS_CUR_FILE "${PWD}/${PKGDIR}/${file}"
     export VENUS_CUR_TARGET "${PWD}/${1}/${file}"
     redo-ifchange ../../root/${file}
     ;
