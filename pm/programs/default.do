@@ -1,26 +1,30 @@
 #!/bin/execlineb -S3
 if -Xn { test "all" = "${1}" }
-backtick -Ex dbfile { ../repo/get $1 }
-if { redo-ifchange $dbfile }
-backtick name { ../repo/get -k name $1 }
-backtick version { ../repo/get -k version $1 }
-backtick -D "" rundeps { ../repo/get -t rundeps $1 }
-multisubstitute {
-	importas -iu name name
-	importas -iu version version
-	importas -isu rundeps rundeps
+if {
+	backtick -Ex dbfile { ../repo/get $1 }
+	redo-ifchange $dbfile
 }
-if { redo-ifchange $rundeps }
+if {
+	pipeline { ../repo/get -t rundeps $1 }
+	xargs redo-ifchange
+}
+backtick -Ex name { ../repo/get -k name $1 }
 ifelse -Xn { test "${1}" = "${name}" }  {
 	if { redo-ifchange $name }
 	ln -s $name $3
 }
-backtick -Ex hash { ../repo/get -h $name }
+getcwd PWD
+backtick hash { ../repo/get -h $name }
+backtick version { ../repo/get -k version $1 }
+multisubstitute {
+	importas -iu PWD PWD
+	importas -iu hash hash
+	importas -iu version version
+}
 define PKGDIR "../cache/${hash}.${1}#${version}"
 export VENUS_CUR_PKGNAME "${name}"
 if { redo-ifchange $PKGDIR }
 if { ln -s $PKGDIR $3 }
-getcwd -E PWD
 cd $3
 find . ! -type d -exec
     define file "{}"

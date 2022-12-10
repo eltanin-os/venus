@@ -5,23 +5,33 @@ elglob repositories "*"
 forx -Ep repo { $repositories }
 if { test -f "${repo}/repo.conf" }
 cd $repo
-backtick arch { uname -m }
-backtick safeurl { venus-conf safeurl repo.conf }
-backtick tmpfile { mktemp }
-multisubstitute {
-	importas -iu arch arch
-	importas -iu safeurl safeurl
-	importas -iu tmpfile tmpfile
+backtick -Ex tmpfile { mktemp }
+if {
+	backtick arch { uname -m }
+	backtick safeurl { venus-conf safeurl repo.conf }
+	multisubstitute {
+		importas -iu arch arch
+		importas -iu safeurl safeurl
+	}
+	if { curl -#Lo chksum ${safeurl}/${arch}/chksum }
+	curl -#Lo $tmpfile ${safeurl}/${arch}/database
 }
-if { curl -#Lo chksum ${safeurl}/${arch}/chksum }
-if { curl -#Lo $tmpfile ${safeurl}/${arch}/database }
-backtick f1sum { pipeline { venus-cksum -w $tmpfile } venus-conf $tmpfile }
-backtick -D "0xF" f2sum { if { test -e database } venus-conf database database }
-multisubstitute {
-	importas -iu f1sum f1sum
-	importas -iu f2sum f2sum
+ifelse {
+	backtick sum1 {
+		pipeline { venus-cksum -w $tmpfile }
+		venus-conf $tmpfile
+	}
+	backtick -D "0xF" sum2 {
+		if { test -e database }
+		venus-conf database database
+	}
+	multisubstitute {
+		importas -iu sum1 sum1
+		importas -iu sum2 sum2
+	}
+	test "${sum1}" = "${sum2}"
 }
-ifelse { test "${f1sum}" = "${f2sum}" } { exit 0 }
+{ exit 0 }
 if { pipeline { lzip -dc $tmpfile } venus-ar -x }
 redirfd -w 1 database
 echo database:${f1}
