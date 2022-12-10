@@ -7,6 +7,7 @@ multisubstitute {
 # XXX: use a config file
 case -- ${VENUS_CUR_DIR} {
 	"[.](/boot|/etc)(|/.*)" {
+		if -Xnt { test -e ${VENUS_CUR_DIR}/${VENUS_CUR_FILE} }
 		cp ${VENUS_CUR_FILE} $3
 	}
 }
