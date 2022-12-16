@@ -41,6 +41,6 @@ ifelse -Xn { test "0" = "${ELGETOPT_k}" } {
 	venus-conf ${ELGETOPT_k} $file
 }
 ifelse -Xn { test "0" = "${ELGETOPT_t}" } {
-	venus-conf -t ${ELGETOPT_t} $file
+	foreground { venus-conf -t ${ELGETOPT_t} $file }
 }
 echo $file
