@@ -1,5 +1,5 @@
 #!/bin/execlineb -S3
-if -Xn { test "all" = "${1}" }
+if -Xnt { test "all" = "${1}" }
 if {
 	backtick -Ex dbfile { ../repo/get $1 }
 	redo-ifchange $dbfile
