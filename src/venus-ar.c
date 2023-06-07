@@ -90,7 +90,6 @@ filelist(void)
 	char **args;
 	char *s;
 	/* get lines */
-	s = 0;
 	n = 0;
 	c_mem_set(&arr, sizeof(arr), 0);
 	while ((r = c_ioq_getln(ioq0, &arr)) > 0) ++n;
@@ -114,7 +113,7 @@ sort(void *va, void *vb)
 	ctype_dent *a, *b;
 	a = va;
 	b = vb;
-	return b->stp->size - a->stp->size;
+	return c_str_cmp(a->name, -1, b->name);
 }
 
 static void
