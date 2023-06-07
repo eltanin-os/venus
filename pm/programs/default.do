@@ -1,28 +1,45 @@
 #!/bin/execlineb -S3
-if -Xnt { test "all" = "${1}" }
+backtick -Ex progname { pipeline { echo $1 } cut -d"#" -f1 }
+case -- $1 {
+"all" { exit 0 }
+# TODO: version check "name" = "name#latest"
+".*#.*" { redo-ifchange $progname }
+}
 if {
-	backtick -Ex dbfile { ../repo/get $1 }
+	backtick -Ex dbfile { ../repo/get $progname }
 	redo-ifchange $dbfile
 }
 if {
-	pipeline { ../repo/get -t rundeps $1 }
+	pipeline { ../repo/get -t rundeps $progname }
 	xargs redo-ifchange
 }
-backtick -Ex name { ../repo/get -k name $1 }
-ifelse -Xn { test "${1}" = "${name}" }  {
-	if { redo-ifchange $name }
-	ln -s $name $3
+backtick -Ex name { ../repo/get -k name $progname }
+ifelse {
+	case -- $progname {
+	"${name}|${name}-dev|${name}-dyn" { false }
+	}
+	true
+} {
+	backtick -Ex dep {
+		case -- $progname {
+		".*-dev" { echo "${name}-dev" }
+		".*-dyn" { echo "${name}-dyn" }
+		}
+		echo "${name}"
+	}
+	if { redo-ifchange $dep }
+	ln -s $dep $3
 }
 getcwd PWD
-backtick hash { ../repo/get -h $name }
-backtick version { ../repo/get -k version $1 }
+backtick hash { ../repo/get -h $progname }
+backtick version { ../repo/get -k version $progname }
 multisubstitute {
 	importas -iu PWD PWD
 	importas -iu hash hash
 	importas -iu version version
 }
-define PKGDIR "../cache/${hash}.${1}#${version}"
-export VENUS_CUR_PKGNAME "${name}"
+define PKGDIR "../cache/${hash}.${progname}#${version}"
+export VENUS_CUR_PKGNAME "${progname}"
 if { redo-ifchange $PKGDIR }
 if { ln -s $PKGDIR $3 }
 cd $3
@@ -32,6 +49,6 @@ find . ! -type d -exec
     if { mkdir -p ../../root/${dir} }
     export VENUS_CUR_DIR "${dir}"
     export VENUS_CUR_FILE "${PWD}/${PKGDIR}/${file}"
-    export VENUS_CUR_TARGET "${PWD}/${1}/${file}"
+    export VENUS_CUR_TARGET "${PWD}/${progname}/${file}"
     redo-ifchange ../../root/${file}
     ;
