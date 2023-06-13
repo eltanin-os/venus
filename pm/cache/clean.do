@@ -1,21 +1,15 @@
 #!/bin/execlineb -S3
-pipeline {
-	pipeline { redo-targets }
-	getcwd -E PWD
-	grep "${PWD}"
+backtick -Ex programs {
+	pipeline { ls -l ../programs }
+	sed -n "s;.*-> ;;p"
 }
+pipeline { ls }
 xargs -I "{}"
     define target "{}"
-    ifelse -Xn { test -d $target } { rm $target }
-    backtick linkpath {
-    	backtick -Ex file {
-    		pipeline { basename $target }
-    		sed -e "s;^.\\{129\\};;"  -e "s;#.*;;"
-    	}
-    	readlink -f ../programs/${file}
+    case -- "\n${programs}\n" {
+    ".*\n../cache/${target}\n.*" { exit 0 }
     }
-    if -Xnt {
-    	importas -iu linkpath linkpath
-    	test "${target}" = "${linkpath}"
+    case -- $target {
+    ".*.do" { exit 0 }
     }
     rm -Rf $target
