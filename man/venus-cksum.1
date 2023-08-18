@@ -1,4 +1,4 @@
-.Dd $Mdocdate: February 27 2021 $
+.Dd $Mdocdate: July 16 2023 $
 .Dt VENUS-CKSUM 1
 .Os
 .Sh NAME
@@ -6,14 +6,13 @@
 .Nd write file checksums and sizes
 .Sh SYNOPSIS
 .Nm
-.Op Fl w
-.Op Ar
+.Ar
 .Sh DESCRIPTION
 The
 .Nm
 utility writes to the standard output a single line for each
 .Ar file ,
-consiting of the fletcher checksum and the path.
+consiting of the blake2b checksum and the path.
 If
 .Ar file
 is a single dash
@@ -21,10 +20,5 @@ is a single dash
 or absent,
 .Nm
 reads from the standard input.
-.Sh OPTIONS
-.Bl -tag -width Ds
-.It Fl w
-Set whirlpool as sum algorithm.
-.El
 .Sh EXIT STATUS
 .Ex -std

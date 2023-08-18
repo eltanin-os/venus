@@ -15,7 +15,7 @@ if {
 	curl -#Lo $3 ${url}/${arch}/${file}
 }
 backtick f1 { ../repo/get -h $VENUS_CUR_PKGNAME }
-backtick f2 { pipeline { venus-cksum -w $3 } venus-conf $3 }
+backtick f2 { pipeline { venus-cksum $3 } venus-conf $3 }
 multisubstitute {
 	importas -iu f1 f1
 	importas -iu f2 f2

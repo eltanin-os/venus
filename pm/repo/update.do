@@ -18,7 +18,7 @@ if {
 }
 ifelse {
 	backtick sum1 {
-		pipeline { venus-cksum -w $tmpfile }
+		pipeline { venus-cksum $tmpfile }
 		venus-conf $tmpfile
 	}
 	backtick -D "0xF" sum2 {
