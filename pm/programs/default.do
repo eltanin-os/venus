@@ -30,25 +30,27 @@ ifelse {
 	if { redo-ifchange $dep }
 	ln -s $dep $3
 }
-getcwd PWD
-backtick hash { ../repo/get -h $progname }
-backtick version { ../repo/get -k version $progname }
-multisubstitute {
-	importas -iu PWD PWD
-	importas -iu hash hash
-	importas -iu version version
+if {
+	backtick hash { ../repo/get -h $progname }
+	backtick version { ../repo/get -k version $progname }
+	multisubstitute {
+		importas -iu hash hash
+		importas -iu version version
+	}
+	define PKGDIR "../cache/${hash}.${progname}#${version}"
+	export VENUS_CUR_PKGNAME "${progname}"
+	if { redo-ifchange $PKGDIR }
+	ln -s $PKGDIR $3
 }
-define PKGDIR "../cache/${hash}.${progname}#${version}"
-export VENUS_CUR_PKGNAME "${progname}"
-if { redo-ifchange $PKGDIR }
-if { ln -s $PKGDIR $3 }
+getcwd -E pwd
 cd $3
+backtick VENUS_ROOTDIR {
+	backtick -Ex dir { dirname $pwd }
+	echo ${dir}/root
+}
+getcwd VENUS_CUR_TARGETDIR
+export VENUS_CUR_PKGDIR "${pwd}/${progname}"
 find . ! -type d -exec
     define file "{}"
-    backtick -Ex dir { dirname $file }
-    if { mkdir -p ../../root/${dir} }
-    export VENUS_CUR_DIR "${dir}"
-    export VENUS_CUR_FILE "${PWD}/${PKGDIR}/${file}"
-    export VENUS_CUR_TARGET "${PWD}/${progname}/${file}"
     redo-ifchange ../../root/${file}
     ;
