@@ -9,8 +9,9 @@ multisubstitute {
 }
 elgetpositionals
 emptyenv -Po
-backtick file {
-	backtick -Ex cdir { dirname $0 } cd $cdir
+backtick -Ex file {
+	backtick -Ex dir { dirname $0 }
+	cd $dir
 	getcwd PWD
 	multisubstitute {
 		elglob -s repositories "*"
@@ -20,15 +21,15 @@ backtick file {
 	if { test -e "${repo}/${1}" }
 	echo ${PWD}/${repo}/${1}
 }
-importas -iu file file
-ifelse -Xn { test "0" = "${ELGETOPT_c}" } {
+if { test -n "${file}" }
+ifelse -n { test "0" = "${ELGETOPT_c}" } {
 	backtick -Ex dir { dirname $file }
 	venus-conf $ELGETOPT_c ${dir}/repo.conf
 }
-ifelse -Xn { test "0" = "${ELGETOPT_d}" } {
+ifelse -n { test "0" = "${ELGETOPT_d}" } {
 	dirname $file
 }
-ifelse -Xn { test "0" = "${ELGETOPT_h}" } {
+ifelse -n { test "0" = "${ELGETOPT_h}" } {
 	backtick dir { dirname $file }
 	backtick version { venus-conf version $file }
 	multisubstitute {
@@ -37,10 +38,10 @@ ifelse -Xn { test "0" = "${ELGETOPT_h}" } {
 	}
 	venus-conf ${1}#${version}.pkg ${dir}/chksum
 }
-ifelse -Xn { test "0" = "${ELGETOPT_k}" } {
+ifelse -n { test "0" = "${ELGETOPT_k}" } {
 	venus-conf ${ELGETOPT_k} $file
 }
-ifelse -Xn { test "0" = "${ELGETOPT_t}" } {
+ifelse -n { test "0" = "${ELGETOPT_t}" } {
 	foreground { venus-conf -t ${ELGETOPT_t} $file }
 }
 echo $file
