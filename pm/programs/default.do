@@ -1,34 +1,38 @@
 #!/bin/execlineb -S3
 backtick -Ex progname { pipeline { echo $1 } cut -d"#" -f1 }
 case -- $1 {
-"all" { exit 0 }
-# TODO: version check "name" = "name#latest"
-".*#.*" { redo-ifchange $progname }
+	"all" { exit 0 }
+	# TODO: version check "name" = "name#latest"
+	".*#.*" { redo-ifchange $progname }
 }
 if {
 	backtick -Ex dbfile { ../repo/get $progname }
 	redo-ifchange $dbfile
 }
-if {
-	pipeline { ../repo/get -t rundeps $progname }
-	xargs redo-ifchange
-}
 backtick -Ex name { ../repo/get -k name $progname }
 ifelse {
 	case -- $progname {
-	"${name}|${name}-dev|${name}-dyn" { false }
+		"${name}|${name}-dev|${name}-dyn" { false }
 	}
 	true
 } {
 	backtick -Ex dep {
 		case -- $progname {
-		".*-dev" { echo "${name}-dev" }
-		".*-dyn" { echo "${name}-dyn" }
+			".*-dev" { echo "${name}-dev" }
+			".*-dyn" { echo "${name}-dyn" }
 		}
 		echo "${name}"
 	}
 	if { redo-ifchange $dep }
 	ln -s $dep $3
+}
+if {
+	if {
+		if -t { ../repo/get ${progname}-dyn }
+		redo-ifchange ${progname}-dyn
+	}
+	pipeline { ../repo/get -t rundeps $progname }
+	xargs redo-ifchange
 }
 if {
 	backtick hash { ../repo/get -h $progname }
