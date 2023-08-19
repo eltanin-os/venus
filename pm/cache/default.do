@@ -1,6 +1,6 @@
 #!/bin/execlineb -S3
 if {
-	if -Xnt { test -e ${1}.pkg }
+	if -nt { test -e ${1}.pkg }
 	redo ${1}.pkg
 }
 if { mkdir $3 }

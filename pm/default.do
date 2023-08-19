@@ -45,7 +45,7 @@ BEGIN {
 # XXX: use a config file
 case -- $path {
 	"(boot|etc)(|/.*)" {
-		if -Xnt { test -e ${VENUS_ROOTDIR}/${path}/${1} }
+		if -nt { test -e ${VENUS_ROOTDIR}/${path}/${1} }
 		importas -iu VENUS_CUR_TARGETDIR VENUS_CUR_TARGETDIR
 		cp ${VENUS_CUR_TARGETDIR}/${path}/${1} $3
 	}

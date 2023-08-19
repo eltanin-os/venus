@@ -7,9 +7,9 @@ pipeline { ls }
 xargs -I "{}"
     define target "{}"
     case -- "\n${programs}\n" {
-    ".*\n../cache/${target}\n.*" { exit 0 }
+    	".*\n../cache/${target}\n.*" { exit 0 }
     }
     case -- $target {
-    ".*.do" { exit 0 }
+    	".*.do" { exit 0 }
     }
     rm -Rf $target
