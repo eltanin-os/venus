@@ -1,15 +1,11 @@
 #include <tertium/cpu.h>
 #include <tertium/std.h>
 
-struct conf {
-	ctype_kvtree s;
-	ctype_kvtree m;
-};
-
-static struct conf conf;
+static ctype_kvtree stree;
+static ctype_kvtree mtree;
 
 static int
-machine(struct conf *c, int state, char *s, usize n)
+machine(int state, char *s, usize n)
 {
 	static ctype_node *np;
 	static ctype_arr key; /* "memory leak" */
@@ -19,7 +15,7 @@ machine(struct conf *c, int state, char *s, usize n)
 		p = c_mem_chr(s, n, ':');
 		if (p) {
 			*p++ = 0;
-			r = c_adt_kvadd(&c->s, s, c_str_dup(p, -1));
+			r = c_adt_kvadd(&stree, s, c_str_dup(p, -1));
 			if (r < 0) c_err_diex(1, "no memory");
 			return 0;
 		} else {
@@ -38,7 +34,7 @@ machine(struct conf *c, int state, char *s, usize n)
 			if (r < 0) c_err_diex(1, "no memory");
 			return 1;
 		} else {
-			r = c_adt_kvadd(&c->m, c_arr_data(&key), np);
+			r = c_adt_kvadd(&mtree, c_arr_data(&key), np);
 			np = nil;
 			return 0;
 		}
@@ -46,7 +42,7 @@ machine(struct conf *c, int state, char *s, usize n)
 }
 
 static void
-initconf(struct conf *c, ctype_fd fd)
+initconf(ctype_fd fd)
 {
 	ctype_ioq ioq;
 	ctype_arr arr;
@@ -56,9 +52,9 @@ initconf(struct conf *c, ctype_fd fd)
 	state = 0;
 	c_ioq_init(&ioq, fd, buf, sizeof(buf), &c_nix_fdread);
 	c_mem_set(&arr, sizeof(arr), 0);
-	while ((r = c_ioq_getln(&ioq, &arr)) > 0) {
+	while ((r = c_ioq_getln(&arr, &ioq)) > 0) {
 		c_arr_trunc(&arr, c_arr_bytes(&arr) - 1, sizeof(uchar));
-		state = machine(c, state, c_arr_data(&arr), c_arr_bytes(&arr));
+		state = machine(state, c_arr_data(&arr), c_arr_bytes(&arr));
 		c_arr_trunc(&arr, 0, sizeof(uchar));
 	}
 	if (state) c_err_diex(1, "bad formatted file");
@@ -95,7 +91,7 @@ expand(char *k, char *value)
 		/* get key */
 		if (!c_str_cmp(k, -1, s+1)) { ++s; continue; }
 		tmp = *p; *p = 0;
-		v = c_adt_kvget(&conf.s, s+1);
+		v = c_adt_kvget(&stree, s+1);
 		*p = tmp;
 		if (!v) { ++s; continue; }
 		/* expand the variable */
@@ -115,21 +111,22 @@ expand(char *k, char *value)
 	return c_arr_data(&arr);
 }
 
-static void
+static ctype_status
 skeys(char *k, void *v)
 {
 	char *nv;
-	if (!v || !(nv = expand(k, v))) return;
+	if (!v || !(nv = expand(k, v))) return 0;
 	c_std_free(v);
-	c_adt_kvadd(&conf.s, k, nv);
+	c_adt_kvadd(&stree, k, nv);
+	return 0;
 }
 
-static void
+static ctype_status
 mkeys(char *k, void *v)
 {
 	ctype_node *wp;
 
-	if (!v) return;
+	if (!v) return 0;
 	(void)k;
 
 	wp = ((ctype_node *)v)->next;
@@ -137,6 +134,7 @@ mkeys(char *k, void *v)
 		if (!(v = expand(k, wp->p))) continue;
 		wp->p = v;
 	} while ((wp = wp->next)->prev);
+	return 0;
 }
 
 static void
@@ -204,18 +202,18 @@ main(int argc, char **argv)
 	default:
 		usage();
 	}
-	initconf(&conf, fd);
-	c_adt_kvtraverse(&conf.s, skeys);
-	c_adt_kvtraverse(&conf.m, mkeys);
+	initconf(fd);
+	c_adt_kvtraverse(&stree, skeys);
+	c_adt_kvtraverse(&mtree, mkeys);
 	if (mode) {
-		if (!(s = c_adt_kvget(&conf.m, *argv))) return 1;
+		if (!(s = c_adt_kvget(&mtree, *argv))) return 1;
 		printlist((void *)s);
 	} else {
-		if (!(s = c_adt_kvget(&conf.s, *argv))) return 1;
+		if (!(s = c_adt_kvget(&stree, *argv))) return 1;
 		c_ioq_fmt(ioq1, "%s\n", s);
 	}
-	c_adt_kvfree(&conf.s, freeobj);
-	c_adt_kvfree(&conf.m, freelist);
+	c_adt_kvfree(&stree, freeobj);
+	c_adt_kvfree(&mtree, freelist);
 	c_ioq_flush(ioq1);
 	return 0;
 }

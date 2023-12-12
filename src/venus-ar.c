@@ -92,7 +92,7 @@ filelist(void)
 	/* get lines */
 	n = 0;
 	c_mem_set(&arr, sizeof(arr), 0);
-	while ((r = c_ioq_getln(ioq0, &arr)) > 0) ++n;
+	while ((r = c_ioq_getln(&arr, ioq0)) > 0) ++n;
 	if (r < 0) c_err_die(1, "failed to read stdin");
 	c_dyn_shrink(&arr);
 	s = c_arr_data(&arr);
@@ -214,7 +214,7 @@ static void
 getall(ctype_ioq *p, char *s, usize n)
 {
 	size r;
-	r = c_ioq_get(p, s, n);
+	r = c_ioq_get(s, n, p);
 	if (r < 0) c_err_die(1, "failed to read file");
 	if (r < (size)n) c_err_diex(1, "incomplete file");
 }
