@@ -5,5 +5,5 @@ if {
 }
 if { mkdir $3 }
 cd $3
-pipeline { lzip -dc ../${1}.pkg }
+pipeline { plzip -dc ../${1}.pkg }
 venus-ar -x

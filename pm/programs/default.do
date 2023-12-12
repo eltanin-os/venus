@@ -6,8 +6,8 @@ case -- $1 {
 	".*#.*" { redo-ifchange $progname }
 }
 if {
-	backtick -Ex dbfile { ../repo/get $progname }
-	redo-ifchange $dbfile
+	backtick -Ex datafile { ../repo/get $progname }
+	redo-ifchange $datafile
 }
 backtick -Ex name { ../repo/get -k name $progname }
 ifelse {
@@ -31,30 +31,21 @@ if {
 		if -t { ../repo/get ${progname}-dyn }
 		redo-ifchange ${progname}-dyn
 	}
-	pipeline { ../repo/get -t rundeps $progname }
-	xargs redo-ifchange
-}
-if {
-	backtick hash { ../repo/get -h $progname }
-	backtick version { ../repo/get -k version $progname }
-	multisubstitute {
-		importas -iu hash hash
-		importas -iu version version
+	backtick rundeps { ../repo/get -t rundeps $progname }
+	if -t {
+		importas -i rundeps rundeps
+		test -n "${rundeps}"
 	}
-	define PKGDIR "../cache/${hash}.${progname}#${version}"
-	export VENUS_CUR_PKGNAME "${progname}"
-	if { redo-ifchange $PKGDIR }
-	ln -s $PKGDIR $3
+	importas -isu rundeps rundeps
+	redo-ifchange $rundeps
 }
-getcwd -E pwd
-cd $3
-backtick VENUS_ROOTDIR {
-	backtick -Ex dir { dirname $pwd }
-	echo ${dir}/root
+backtick hash { ../repo/get -h $progname }
+backtick version { ../repo/get -k version $progname }
+multisubstitute {
+	importas -iu hash hash
+	importas -iu version version
 }
-getcwd VENUS_CUR_TARGETDIR
-export VENUS_CUR_PKGDIR "${pwd}/${progname}"
-find . ! -type d -exec
-    define file "{}"
-    redo-ifchange ../../root/${file}
-    ;
+define PKGDIR "../cache/${hash}.${progname}#${version}"
+export VENUS_CUR_PKGNAME "${progname}"
+if { redo-ifchange $PKGDIR }
+ln -s $PKGDIR $3

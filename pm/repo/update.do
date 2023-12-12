@@ -32,6 +32,6 @@ ifelse {
 	test "${sum1}" = "${sum2}"
 }
 { exit 0 }
-if { pipeline { lzip -dc $tmpfile } venus-ar -x }
+if { pipeline { plzip -dc $tmpfile } venus-ar -x }
 redirfd -w 1 database
 echo database:${f1}
