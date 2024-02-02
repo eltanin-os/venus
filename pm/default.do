@@ -28,6 +28,6 @@ backtick -Ex relpath {
 	awk
 	    -f ${storedir}/realpath.awk
 	    -vcurrent=${rootdir}
-	    -vtarget=${VENUS_CUR_PKGDIR}/${path}
+	    -vtarget=${VENUS_CUR_PKGDIR}${path}
 }
 ln -s ${relpath}/${1} $3
