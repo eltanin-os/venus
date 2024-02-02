@@ -113,7 +113,7 @@ sort(void *va, void *vb)
 	ctype_dent *a, *b;
 	a = va;
 	b = vb;
-	return c_str_cmp(a->name, -1, b->name);
+	return c_str_cmp(a->name, C_STD_MIN(a->nlen, b->nlen) + 1, b->name);
 }
 
 static void
@@ -131,11 +131,8 @@ archivefd(ctype_ioq *p, char **argv)
 		switch (ep->info) {
 		case C_DIR_FSD:
 		case C_DIR_FSDC:
-		case C_DIR_FSDOT:
 		case C_DIR_FSDP:
-		case C_DIR_FSINT:
 			continue;
-		case C_DIR_FSDEF:
 		case C_DIR_FSDNR:
 		case C_DIR_FSERR:
 		case C_DIR_FSNS:
