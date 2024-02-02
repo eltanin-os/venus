@@ -1,16 +1,13 @@
-#!/bin/execlineb -S3
-elglob -ms packages "./*"
+#!/bin/execlineb -P
+elglob -ms packages "*"
 getcwd -E pwd
 backtick VENUS_ROOTDIR {
-	backtick -Ex dir { dirname $pwd }
-	echo ${dir}/root
+       backtick -Ex dir { dirname $pwd }
+       echo ${dir}/root
 }
-forx -pE path { $packages }
-if { test -d "${path}" }
-cd $path
+forx -E pkg { $packages }
+if { test -d "${pkg}" }
+cd $pkg
 getcwd VENUS_CUR_TARGETDIR
-export VENUS_CUR_PKGDIR "${pwd}/${path}"
-find . ! -type d -exec
-    define file "{}"
-    redo-ifchange ../../root/${file}
-    ;
+export VENUS_CUR_PKGDIR "${pwd}/${pkg}"
+find . ! -type d -exec execlineb -s0 -c "redo-ifchange ../../root/$@" {} +
