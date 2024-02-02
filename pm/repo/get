@@ -10,7 +10,10 @@ multisubstitute {
 elgetpositionals
 emptyenv -Po
 backtick -Ex file {
-	backtick -Ex dir { dirname $0 }
+	backtick -Ex dir {
+		pipeline { echo $0 }
+		awk -F "/" "{for (i = 1; i < NF - 1; i++) printf \"%s/\", $i; print \"repo\"}"
+	}
 	cd $dir
 	getcwd PWD
 	multisubstitute {
