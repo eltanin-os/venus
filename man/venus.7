@@ -1,66 +1,58 @@
-.Dd $Mdocdate: October 30 2022 $
+.Dd $Mdocdate: February 07 2024 $
 .Dt VENUS 7
 .Os
 .Nm venus
-.Nd A package manager
+.Nd A functional package manager
 .Sh DESCRIPTION
-The venus utility is actually a set of tools that are used together
-to provide an environment to manage packages.
+The software venus is actually a set of tools that are used
+together to power a
+.Xr redo 1
+scheme to manage packages in an
+atomic and reproducible manner.
 .Ss Store
-The store is where the package management occurs, it has the following
-structure:
-.Bl -tag -width programs
-.It cache
-The directory that contains the compressed and uncompressed packages.
-.It programs
-The directory that contains the installed packages.
-.It repo
-The directory that contains the repositories.
-.It root
-The directory where the root system is mounted.
+The store is where the main scheme to manage the systems are,
+it has the following directory hierarchy:
+.Bl -tag -width modules
+.It config
+A directory where the configuration files are contained,
+each file is encoded with
+.Xr venus-conf 5
+and declares the system's state of same name.
+.It modules
+A directory where each directory represents a module.
+.It sys
+A directory where each directory is a system with its state set by a config
+file of same name.
 .El
 .Pp
-The packages are installed in the directory
-.Ar programs ,
-each program is a symbolic link to the real package into the
-.Ar cache
-folder. When a package is installed, symbolic links are created at the
-.Ar root
-directory, pointing to its respective file into the package directory.
-.Pp
-The repositories are declared by creating a directory and a
-.Pa repo.conf
-file to provide the urls.
-.Pp
-The file
-.Pa repo.conf
-is encoded in the
-.Xr venus-conf 5
-format and must declare url
-.Pq mirror or official repo
-and safeurl
-.Pq official repo .
-.Ss Repository
-The remote repositories are composed of a root directory that contains
-directories named after each supported architecture, each one containing
-inside a
-.Pa database
-and
-.Pa chksum
-file and the compressed packages.
-.Pp
-The
-.Pa database
-file is a bundle of files compressed together, each file encoded in
-.Xr venus-pkgdesc 5
-format.
-.Pp
-The
-.Pa chksum
-file is encoded in the
-.Xr venus-conf 5
-format, it contains a key for each package, the key being the package file
-name and the value its cryptographic checksum.
+It also has the following rules meant to use:
+.Bl -tag -width modules
+.It clean.do
+A rule to clean all the cache.
+.It sync.do
+A rule to sync the all the systems states with their config file and collect
+garbage.
+.El
+.Ss Modules
+The modules are
+.Xr redo 1
+schemes to support repositories and packages format. Each module is mostly
+free to set rules and its hierarchy according to its needs, the only rules
+expected are:
+.Bl -tag -width
+.It cache/clean.do
+A rule to clean the cache.
+.It default.progs.do
+A rule to create a directory populated with a sub-directory for each
+package listed on
+.Dq packages
+at
+.Dq ${module-name}
+in the configuration file passed through the environmental variable
+.Ev VENUS_CONFIG_FILE
+encoded in
+.Xr venus-conf 5 .
+.El
 .Sh SEE ALSO
 .Xr venus-cksum 1 ,
 .Xr venus-conf 1

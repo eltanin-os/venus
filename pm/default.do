@@ -1,7 +1,7 @@
 #!/bin/execlineb -S3
-importas -iu VENUS_CUR_PKGDIR VENUS_CUR_PKGDIR
-if { redo-ifchange $VENUS_CUR_PKGDIR }
-importas -iu VENUS_ROOTDIR VENUS_ROOTDIR
+importas -i VENUS_CUR_PKGDIR VENUS_CUR_PKGDIR
+#if { redo-ifchange $VENUS_CUR_PKGDIR }
+importas -i VENUS_ROOTDIR VENUS_ROOTDIR
 backtick -Ex path {
 	pipeline { echo $3 }
 	sed -e "s;${VENUS_ROOTDIR}/;;" -e "s;/[^/]*$;;"
@@ -10,8 +10,8 @@ backtick -Ex path {
 case -- $path {
 	"(boot|etc)(|/.*)" {
 		if -nt { test -e ${VENUS_ROOTDIR}/${path}/${1} }
-		importas -iu VENUS_CUR_TARGETDIR VENUS_CUR_TARGETDIR
-		cp ${VENUS_CUR_TARGETDIR}/${path}/${1} $3
+		importas -i VENUS_CUR_PKGABS VENUS_CUR_PKGABS
+		cp ${VENUS_CUR_PKGABS}/${path}/${1} $3
 	}
 }
 backtick -Ex relpath {
@@ -20,7 +20,10 @@ backtick -Ex relpath {
 		cd $dir
 		pwd -P
 	}
-	backtick storedir { dirname $VENUS_ROOTDIR }
+	backtick storedir {
+		backtick -Ex dir { dirname $VENUS_ROOTDIR }
+		dirname $dir
+	}
 	multisubstitute {
 		importas -iu rootdir rootdir
 		importas -iu storedir storedir
@@ -28,6 +31,6 @@ backtick -Ex relpath {
 	awk
 	    -f ${storedir}/realpath.awk
 	    -vcurrent=${rootdir}
-	    -vtarget=${VENUS_CUR_PKGDIR}${path}
+	    -vtarget=${VENUS_CUR_PKGDIR}/${path}
 }
 ln -s ${relpath}/${1} $3

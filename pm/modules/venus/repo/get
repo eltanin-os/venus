@@ -9,25 +9,43 @@ multisubstitute {
 }
 elgetpositionals
 emptyenv -Po
+importas -i VENUS_CONFIG_FILE VENUS_CONFIG_FILE
+define CONFIG "../../../config/${VENUS_CONFIG_FILE}"
+backtick REPODIR {
+	pipeline { echo $0 }
+	awk -F "/" "{for (i = 1; i < NF - 1; i++) printf \"%s/\", $i; print \"repo\"}"
+}
 backtick -Ex file {
-	backtick -Ex dir {
-		pipeline { echo $0 }
-		awk -F "/" "{for (i = 1; i < NF - 1; i++) printf \"%s/\", $i; print \"repo\"}"
-	}
-	cd $dir
+	importas -i REPODIR REPODIR
+	cd $REPODIR
 	getcwd PWD
+	backtick -D "" pkgrepo {
+		pipeline { venus-conf -t venus $CONFIG }
+		pipeline { venus-conf -t packages }
+		pipeline { venus-conf -t $1 }
+		venus-conf repo
+	}
+	backtick repositories {
+		pipeline { venus-conf -t venus $CONFIG }
+		venus-conf -lt repo
+	}
 	multisubstitute {
-		elglob -s repositories "*"
+		importas -iu pkgrepo pkgrepo
+		importas -isu repositories repositories
 		importas -iu PWD PWD
 	}
+	# specific repo for the package
+	ifelse { test -n "${pkgrepo}" } { echo ${PWD}/${pkgrepo}/${1} }
+	# search
 	forx -Ex 0 repo { $repositories }
 	if { test -e "${repo}/${1}" }
 	echo ${PWD}/${repo}/${1}
 }
 if { test -n "${file}" }
 ifelse -n { test "0" = "${ELGETOPT_c}" } {
-	backtick -Ex dir { dirname $file }
-	venus-conf $ELGETOPT_c ${dir}/repo.conf
+	importas -i REPODIR REPODIR
+	cd $REPODIR
+	venus-conf $ELGETOPT_c $CONFIG
 }
 ifelse -n { test "0" = "${ELGETOPT_d}" } {
 	dirname $file

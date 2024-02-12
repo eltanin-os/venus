@@ -1,7 +1,12 @@
 #!/bin/execlineb -S3
 backtick -Ex programs {
-	pipeline { ls -l ../programs }
-	sed -n "s;.*-> ;;p"
+	pipeline {
+		elglob -s directories "../*.progs"
+		ls -l ${directories}/
+	}
+	pipeline { sed -n "s;.*-> ;;p" }
+	pipeline { sort }
+	uniq
 }
 pipeline { ls }
 xargs -I "{}"
