@@ -1,43 +1,83 @@
 #include <tertium/cpu.h>
 #include <tertium/std.h>
 
+static int lflag;
+
 static ctype_kvtree stree;
 static ctype_kvtree mtree;
+
+static usize
+graphspan(char *s, usize n)
+{
+	char *p;
+	for (p = s; n && *p && c_utf8_isgraph(*p); --n, ++p) ;
+	return p - s;
+}
 
 static int
 machine(int state, char *s, usize n)
 {
 	static ctype_node *np;
 	static ctype_arr key; /* "memory leak" */
+	int tmp;
 	char *p;
-	ctype_status r;
+
+	if (s[0] == '#') return state;
+
 	if (state == 0) {
-		p = c_mem_chr(s, n, ':');
-		if (p) {
-			*p++ = 0;
-			r = c_adt_kvadd(&stree, s, c_str_dup(p, -1));
-			if (r < 0) c_err_diex(1, "no memory");
-			return 0;
-		} else {
-			r = s[n - 1] == '{';
-			if (!r) c_err_diex(1, "bad formatted file");
+		if (s[n - 1] == '{') {
+			--n;
+			if (!(graphspan(s, n) == n)) {
+				c_err_diex(1, "bad formatted file");
+			}
 			c_arr_trunc(&key, 0, sizeof(uchar));
-			r = c_dyn_fmt(&key, "%.*s", n-1, s);
-			if (r < 0) c_err_diex(1, "no memory");
+			if (c_dyn_fmt(&key, "%.*s", n, s) < 0) {
+				c_err_diex(1, "no memory");
+			}
 			return 1;
+		} else {
+			if ((p = c_mem_chr(s, n, ':'))) {
+				n = p - s;
+				*p++ = 0;
+			} else {
+				p = "";
+			}
+			if (!(graphspan(s, n) == n)) {
+				c_err_diex(1, "bad formatted file");
+			}
+			p = c_str_dup(p, -1);
+			if (c_adt_kvadd(&stree, s, p) < 0) {
+				c_err_diex(1, "no memory");
+			}
+			return 0;
 		}
 	} else {
-		if (!(s[0] == '}' && s[1] == '\0')) {
-			p = c_str_ltrim(s, n, "\t ");
-			n -= p - s;
-			r = c_adt_lpush(&np, c_adt_lnew(p, c_str_len(p, n)+1));
-			if (r < 0) c_err_diex(1, "no memory");
-			return 1;
-		} else {
-			r = c_adt_kvadd(&mtree, c_arr_data(&key), np);
-			np = nil;
-			return 0;
+		if (s[n - 1] == '}') {
+			if (state > 1) {
+				--state;
+				if (lflag) return state;
+			} else {
+				p = c_arr_data(&key);
+				if (c_adt_kvadd(&mtree, p, np) < 0) {
+					c_err_diex(1, "no memory");
+				}
+				np = nil;
+				return 0;
+			}
 		}
+		tmp = (s[n - 1] == '{');
+		if (lflag) {
+			if (tmp) {
+				s[--n] = 0;
+			} else if ((p = c_str_chr(s, n, ':'))) {
+				*p = 0;
+			}
+			if (state > 1) return state + tmp;
+		}
+		if (c_adt_lpush(&np, c_adt_lnew(s, n + 1)) < 0) {
+			c_err_diex(1, "no memory");
+		}
+		return state + tmp;
 	}
 }
 
@@ -49,12 +89,16 @@ initconf(ctype_fd fd)
 	size r;
 	int state;
 	char buf[C_IOQ_BSIZ];
+	char *s;
+
 	state = 0;
 	c_ioq_init(&ioq, fd, buf, sizeof(buf), &c_nix_fdread);
 	c_mem_set(&arr, sizeof(arr), 0);
 	while ((r = c_ioq_getln(&arr, &ioq)) > 0) {
-		c_arr_trunc(&arr, c_arr_bytes(&arr) - 1, sizeof(uchar));
-		state = machine(state, c_arr_data(&arr), c_arr_bytes(&arr));
+		r = c_arr_bytes(&arr);
+		c_arr_trunc(&arr, r - 1, sizeof(uchar));
+		s = c_str_trim(c_arr_data(&arr), r, "\t ");
+		state = machine(state, s, c_str_len(s, r));
 		c_arr_trunc(&arr, 0, sizeof(uchar));
 	}
 	if (state) c_err_diex(1, "bad formatted file");
@@ -89,9 +133,9 @@ expand(char *k, char *value)
 		for (; *p && c_utf8_isalnum(*p); ++p) ;
 		if (p == s) { ++s; continue; }
 		/* get key */
-		if (!c_str_cmp(k, -1, s+1)) { ++s; continue; }
+		if (!c_str_cmp(k, -1, s + 1)) { ++s; continue; }
 		tmp = *p; *p = 0;
-		v = c_adt_kvget(&stree, s+1);
+		v = c_adt_kvget(&stree, s + 1);
 		*p = tmp;
 		if (!v) { ++s; continue; }
 		/* expand the variable */
@@ -104,7 +148,7 @@ expand(char *k, char *value)
 	}
 
 	s = value = c_arr_data(&arr);
-	for (; *s; ++s) if (*s == '$') c_str_cpy(s, -1, s+1);
+	for (; *s; ++s) if (!C_STR_CMP("$$", s)) c_str_cpy(s, -1, s + 1);
 	c_arr_trunc(&arr, s - value, sizeof(uchar));
 
 	c_dyn_shrink(&arr);
@@ -163,7 +207,7 @@ freelist(void *p)
 static void
 usage(void)
 {
-	c_ioq_fmt(ioq1, "usage: %s [-t] key [file]\n", c_std_getprogname());
+	c_ioq_fmt(ioq1, "usage: %s [-lt] key [file]\n", c_std_getprogname());
 	c_std_exit(1);
 }
 
@@ -179,8 +223,11 @@ main(int argc, char **argv)
 
 	fd = 0;
 	mode = 0;
-	while (c_std_getopt(argmain, argc, argv, "t")) {
+	while (c_std_getopt(argmain, argc, argv, "lt")) {
 		switch (argmain->opt) {
+		case 'l':
+			lflag = 1;
+			break;
 		case 't':
 			mode = 1;
 			break;
