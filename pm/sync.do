@@ -21,4 +21,10 @@ if { redo populate }
 # step 2 (remap all at once)
 if { redo-ifchange modules/${mod}/${name}.progs }
 # broken symlinks to ${set}.progs: step1 = new files | step2 = orphans
-redo gc
+# collect orphans
+pipeline { redo-targets populate }
+xargs -I "{}"
+define file "{}"
+if -t { test -L $file }
+if -nt { test -e $file }
+rm $file
