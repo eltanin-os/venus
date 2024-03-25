@@ -1,10 +1,11 @@
 #!/bin/execlineb
-elgetopt "c:dhk:t:"
+elgetopt "cdhk:lt:"
 multisubstitute {
 	importas -uD "0" ELGETOPT_c ELGETOPT_c
 	importas -uD "0" ELGETOPT_d ELGETOPT_d
 	importas -uD "0" ELGETOPT_h ELGETOPT_h
 	importas -uD "0" ELGETOPT_k ELGETOPT_k
+	importas -uD "0" ELGETOPT_l ELGETOPT_l
 	importas -uD "0" ELGETOPT_t ELGETOPT_t
 }
 elgetpositionals
@@ -18,35 +19,41 @@ backtick REPODIR {
 backtick -Ex file {
 	importas -i REPODIR REPODIR
 	cd $REPODIR
-	getcwd PWD
-	backtick -D "" pkgrepo {
-		pipeline { venus-conf -t venus $CONFIG }
-		pipeline { venus-conf -t packages }
-		pipeline { venus-conf -t $1 }
-		venus-conf repo
+	getcwd pwd
+	multisubstitute {
+		importas -D "packages" VENUS_CUR_REPO VENUS_CUR_REPO
+		importas -iu pwd pwd
 	}
+	# specific repo for the package
+	ifelse -n { test "packages" = "${VENUS_CUR_REPO}" } {
+		echo ${pwd}/${VENUS_CUR_REPO}/${1}
+	}
+	# search
 	backtick repositories {
 		pipeline { venus-conf -t venus $CONFIG }
 		venus-conf -lt repo
 	}
-	multisubstitute {
-		importas -iu pkgrepo pkgrepo
-		importas -isu repositories repositories
-		importas -iu PWD PWD
-	}
-	# specific repo for the package
-	ifelse { test -n "${pkgrepo}" } { echo ${PWD}/${pkgrepo}/${1} }
-	# search
+	importas -isu repositories repositories
 	forx -Ex 0 repo { $repositories }
-	if { test -e "${repo}/${1}" }
-	echo ${PWD}/${repo}/${1}
+	if { test -e "${pwd}/${repo}/${1}" }
+	echo ${pwd}/${repo}/${1}
 }
-if { test -n "${file}" }
 ifelse -n { test "0" = "${ELGETOPT_c}" } {
 	importas -i REPODIR REPODIR
 	cd $REPODIR
-	venus-conf $ELGETOPT_c $CONFIG
+	pipeline { venus-conf -t venus $CONFIG }
+	backtick flags {
+		if {
+			if -nt { test "0" = "${ELGETOPT_l}" }
+			echo "-l"
+		}
+		if -nt { test "0" = "${ELGETOPT_t}" }
+		echo "-t"
+	}
+	importas -isu flags flags
+	venus-conf $flags $ELGETOPT_t
 }
+if { test -n "${file}" }
 ifelse -n { test "0" = "${ELGETOPT_d}" } {
 	dirname $file
 }

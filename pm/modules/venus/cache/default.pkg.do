@@ -1,12 +1,18 @@
 #!/bin/execlineb -S3
-importas -i VENUS_CUR_PKGNAME VENUS_CUR_PKGNAME
 if {
 	backtick arch { uname -m }
 	backtick file {
 		pipeline { echo $1 }
 		sed -e "s;^.\\{129\\};;" -e "s;#;%23;"
 	}
-	backtick url { ../repo/get -c url $VENUS_CUR_PKGNAME }
+	backtick url {
+		pipeline { ../repo/get -ct repo }
+		pipeline {
+			importas -i VENUS_CUR_REPO VENUS_CUR_REPO
+			venus-conf -t $VENUS_CUR_REPO
+		}
+		venus-conf url
+	}
 	multisubstitute {
 		importas -iu arch arch
 		importas -iu file file
@@ -14,7 +20,10 @@ if {
 	}
 	curl -#Lo $3 ${url}/${arch}/${file}
 }
-backtick f1 { ../repo/get -h $VENUS_CUR_PKGNAME }
+backtick f1 {
+	importas -i VENUS_CUR_PKGNAME VENUS_CUR_PKGNAME
+	../repo/get -h $VENUS_CUR_PKGNAME
+}
 backtick f2 { pipeline { venus-cksum $3 } venus-conf $3 }
 multisubstitute {
 	importas -iu f1 f1
