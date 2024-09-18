@@ -65,6 +65,7 @@ main(int argc, char **argv)
 	argv += argmain->idx;
 	if (!argc) usage();
 
+	r = 0;
 	for (; *argv; ++argv) {
 		if (hashfile(buf, c_hsh_blake2b512, *argv)) {
 			r = 1;
