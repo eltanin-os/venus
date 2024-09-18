@@ -1,4 +1,4 @@
-.Dd $Mdocdate: October 30 2022 $
+.Dd $Mdocdate: September 18 2024 $
 .Dt VENUS-CONF 5
 .Os
 .Sh NAME
@@ -11,17 +11,12 @@ single-value and multi-value.
 Single value variables are declared as:
 .Dl variable:value
 .Pp
-It can be referred in any order in the following way:
-.Bd -literal -offset indent -compact
-key1:$key3
-key2:$key1
-key3:hello
-.Ed
-.Pp
 Multiple value variables are declared as:
 .Bd -literal -offset indent -compact
 variable{
-value
+  value1
+  value2
+  value3
 }
 .Ed
 .Pp
@@ -39,6 +34,23 @@ users{
     id:666
   }
 }
+.Ed
+.Pp
+The keys can be referred in any order in the following way:
+.Bd -literal -offset indent -compact
+key1:hello
+multi-key-0{
+  value1
+  value2
+  $key3
+}
+multi-key-1{
+  # expand for each key
+  ${multi-key-0}.c
+  # flat expansion
+  $:{multi-key-0}
+}
+key3:$key1
 .Ed
 .Pp
 The variables must be declared one per line.

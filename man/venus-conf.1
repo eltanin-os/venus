@@ -1,26 +1,30 @@
-.Dd $Mdocdate: February 07 2024 $
+.Dd $Mdocdate: September 16 2024 $
 .Dt venus-conf 1
 .Os
 .Sh NAME
 .Nm venus-conf
-.Nd get keys from venus database files
+.Nd retrieve values from venus-conf files
 .Sh SYNOPSIS
 .Nm
-.Op Fl t
+.Op Fl akltv
 .Ar key
 .Op Ar file
 .Sh DESCRIPTION
 The
 .Nm
 utility reads a
-.Ar file
-and searches for the given
-.Ar key
-and, if found, write it to the standard output. The
-.Ar file
-must be encoded in
+.Ar file ,
+encoded in
 .Xr venus-conf 5
-format.
+format, and searches for the specified
+.Ar key .
+If found, it writes the corresponding value to standard output.
+.Pp
+If
+.Ar key
+is a single dash,
+.Nm
+treats the content itself a multi-value key.
 .Pp
 If
 .Ar file
@@ -29,12 +33,22 @@ is a single dash
 or absent,
 .Nm
 reads from the standard input.
+.Pp
+By default, if no flag for key type is specified,
+.Nm
+searches for single-key keys.
 .Sh OPTIONS
 .Bl -tag -width Ds
+.It Fl a
+Search for keys of any type.
+.It Fl k
+When processing multi-value keys, output only the keys.
 .It Fl l
-List entries stripping the data associated with it.
+When processing multi-value keys, exclude values associated with keys.
 .It Fl t
-Search for multiple-value keys.
+Search for multi-value keys only.
+.It Fl v
+When processing multi-value keys, output only the values.
 .El
 .Sh EXIT STATUS
 .Ex -std
