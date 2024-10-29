@@ -19,6 +19,7 @@ enum {
 	MOD_KEYVAL,
 	MOD_ALL,
 	MOD_BLOCK,
+	MOD_SELF,
 };
 
 /* info */
