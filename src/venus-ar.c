@@ -94,7 +94,7 @@ filelist(void)
 	c_mem_set(&arr, sizeof(arr), 0);
 	while ((r = c_ioq_getln(&arr, ioq0)) > 0) ++n;
 	if (r < 0) c_err_die(1, "failed to read stdin");
-	c_dyn_shrink(&arr);
+	c_dyn_shrink(&arr, sizeof(uchar));
 	s = c_arr_data(&arr);
 	/* split lines */
 	args = c_std_alloc(n + 1, sizeof(void *));
