@@ -12,6 +12,7 @@ enum {
 	LFLAG = 1 << 0,
 	KFLAG = 1 << 1,
 	VFLAG = 1 << 2,
+	XFLAG = 1 << 3,
 };
 
 /* modes */
@@ -147,12 +148,11 @@ machine(int state, char *s, usize n, usize diff)
 		return 0;
 	}
 	if (n == 0) return state;
+	if (s[0] == '#' && !(opts & XFLAG)) return state;
 
 	/* key | block */
 	if (state == 0) {
-		if (s[0] == '#') {
-			return state;
-		} else if (s[n - 1] == '{') {
+		if (s[n - 1] == '{') {
 			if (isvariable(s, n - 1)) {
 				c_err_diex(1, "bad formatted file");
 			}
@@ -176,7 +176,8 @@ machine(int state, char *s, usize n, usize diff)
 	/* block */
 	if (graphspan(s, n) != n) {
 		tmp = 0;
-		/* XXX: maybe use an heuristic to deal with dangling '{}' */
+		/* XXX: maybe use an heuristic, when "-x" is given,
+		 * to deal with dangling '{}' */
 		for (p = s; n && *p; ++p) {
 			if (*p == '{') {
 				++tmp;
@@ -550,7 +551,9 @@ eprint(struct entry *e)
 static void
 usage(void)
 {
-	c_ioq_fmt(ioq1, "usage: %s [-akltv] key [file]\n", c_std_getprogname());
+	c_ioq_fmt(ioq1,
+	    "usage: %s [-akltvx] key [file]\n",
+	    c_std_getprogname());
 	c_std_exit(1);
 }
 
@@ -566,7 +569,7 @@ main(int argc, char **argv)
 
 	fd = 0;
 	mode = MOD_KEYVAL;
-	while (c_std_getopt(argmain, argc, argv, "akltv")) {
+	while (c_std_getopt(argmain, argc, argv, "akltvx")) {
 		switch (argmain->opt) {
 		case 'a':
 			mode = MOD_ALL;
@@ -582,6 +585,9 @@ main(int argc, char **argv)
 			break;
 		case 'v':
 			opts = (opts & ~KFLAG) | VFLAG;
+			break;
+		case 'x':
+			opts = (opts & ~(KFLAG | LFLAG | VFLAG)) | XFLAG;
 			break;
 		default:
 			usage();

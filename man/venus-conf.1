@@ -1,4 +1,4 @@
-.Dd $Mdocdate: September 16 2024 $
+.Dd $Mdocdate: November 04 2024 $
 .Dt venus-conf 1
 .Os
 .Sh NAME
@@ -6,7 +6,8 @@
 .Nd retrieve values from venus-conf files
 .Sh SYNOPSIS
 .Nm
-.Op Fl akltv
+.Op Fl a | t
+.Op Fl lkv | x
 .Ar key
 .Op Ar file
 .Sh DESCRIPTION
@@ -40,15 +41,17 @@ searches for single-key keys.
 .Sh OPTIONS
 .Bl -tag -width Ds
 .It Fl a
-Search for keys of any type.
+Search for entries of any type.
 .It Fl k
-When processing multi-value keys, output only the keys.
+Display only keys for multi-value entries.
 .It Fl l
-When processing multi-value keys, exclude values associated with keys.
+Exclude keys associated value from multi-value entries.
 .It Fl t
-Search for multi-value keys only.
+Search for multi-value entries only.
 .It Fl v
-When processing multi-value keys, output only the values.
+Display only values for multi-value entries.
+.It Fl x
+Treat values as exact/literal.
 .El
 .Sh EXIT STATUS
 .Ex -std
