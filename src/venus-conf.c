@@ -1,36 +1,47 @@
 #include <tertium/cpu.h>
 #include <tertium/std.h>
 
-#define META(x) ((*(x) == '$') ? INFO_META : 0)
+#define ISTAG(x) \
+(((uchar *)(uintptr)x)[-1])
+#define ISPRINT(x) \
+(!(flags & LFLAG) || ISTAG(x))
+#define META(x) \
+((*(x) == '$') ? INFO_META : 0)
 #define ISEXPLICIT(x) \
 ((x) == '_' || ((x) != '}' && c_utf8_isgraph((x))))
 #define ISIMPLICIT(x) \
 ((x) == '_' || c_utf8_isalnum((x)))
+#define WL(a, b, c) \
+{ a = (b)->next; do { c; } while((a = a->next)->prev); }
 
 /* flags */
 enum {
-	LFLAG = 1 << 0,
-	KFLAG = 1 << 1,
-	VFLAG = 1 << 2,
-	XFLAG = 1 << 3,
+	OPT_LIST = 1 << 0,
+	LFLAG = 1 << 1,
+	KFLAG = 1 << 2,
+	QFLAG = 1 << 3,
+	VFLAG = 1 << 4,
+	XFLAG = 1 << 5,
+	XXFLAG = 1 << 6,
 };
 
 /* modes */
 enum {
-	MOD_KEYVAL,
-	MOD_ALL,
-	MOD_BLOCK,
-	MOD_SELF,
+	MOD_KEYVAL = 1 << 0,
+	MOD_ALL = 1 << 1,
+	MOD_BLOCK = 1 << 2,
+	MOD_SELF = 1 << 3,
 };
 
 /* info */
 enum {
 	INFO_DEFFERING = 1 << 0,
 	INFO_DEFFERED  = 1 << 1,
-	INFO_KEYVAL    = 1 << 2,
-	INFO_BLOCK     = 1 << 3,
-	INFO_META      = 1 << 4,
-	INFO_REF       = 1 << 5,
+	INFO_KEY       = 1 << 2,
+	INFO_VALUE     = 1 << 3,
+	INFO_BLOCK     = 1 << 4,
+	INFO_META      = 1 << 5,
+	INFO_REF       = 1 << 6,
 };
 
 struct entry {
@@ -45,10 +56,12 @@ struct ref {
 	int free;
 };
 
+static ctype_node *elist;
 static ctype_kvtree tree;
-static uint opts;
+static uint flags;
 
-static ctype_node *deference(char *);
+static void edump(char *, void *);
+static ctype_node *deference(char *, int);
 
 /* util routines */
 static usize
@@ -86,23 +99,83 @@ implicitspan(char *s, usize n)
 static ctype_status
 isvariable(char *s, usize n)
 {
-	if (*s == '$') {
-		++s;
-		--n;
-	}
-	return !(graphspan(s, n) == n);
+	return graphspan(s, n) == n;
 }
 
 static ctype_status
-checkprint(struct entry *e)
+blockprint(struct entry *e)
 {
-	if (opts & KFLAG) {
-		if (!(e->data || (e->info & INFO_REF))) return 1;
-	} else if (opts & VFLAG) {
-		if (e->info & INFO_BLOCK) return 1;
-		if (e->data || (e->info & INFO_REF)) return 1;
+	if (flags & KFLAG) {
+		if (!(e->info & (INFO_REF | INFO_KEY | INFO_BLOCK))) return 1;
+	} else if (flags & VFLAG) {
+		if (e->info & (INFO_REF | INFO_KEY | INFO_BLOCK)) return 1;
 	}
 	return 0;
+}
+
+/* fail routines */
+static void *
+alloc(usize m, usize n)
+{
+	void *p;
+	if (!(p = c_std_calloc(m, n))) c_err_diex(1, "no memory");
+	return p;
+}
+
+static void
+dyncat(ctype_arr *p, void *v, usize m, usize n)
+{
+	if (c_dyn_cat(p, v, m, n) < 0) c_err_diex(1, "no memory");
+}
+
+static void
+dynfmt(ctype_arr *p, char *fmt, ...)
+{
+	va_list ap;
+	va_start(ap, fmt);
+	if (c_dyn_vfmt(p, fmt, ap) < 0) c_err_diex(1, "no memory");
+	va_end(ap);
+}
+
+static void *
+lnew(void *v, usize n)
+{
+	if (!(v = c_adt_lnew(v, n)) && n) c_err_diex(1, "no memory");
+	return v;
+}
+
+/* entry routines */
+static void *
+entnew(char *s, usize n, int state)
+{
+	ctype_node *p;
+
+	p = alloc(1, sizeof(*p));
+	p->next = p;
+	p->prev = nil;
+
+	p->p = alloc(n + 2, sizeof(uchar));
+	*(uchar *)(uintptr)p->p++ = (state > 1) ? 0 : 1;
+	c_mem_cpy(p->p, s, n);
+	return p;
+}
+
+static void *
+entdup(char *s, usize n)
+{
+	char *p;
+	n = c_str_len(s, n);
+	p = alloc(n + 2, sizeof(uchar));
+	p[n] = 0;
+	*p++ = 1;
+	c_mem_cpy(p, s, n);
+	return p;
+}
+
+static void
+entfree(void *p)
+{
+	c_std_free_(&ISTAG(p));
 }
 
 /* build tree routines */
@@ -110,9 +183,16 @@ static void
 epush(char *key, int type, void *data)
 {
 	struct entry *e;
+	char *s;
+
+	if (!*key) return;
 
 	if (!(e = c_adt_kvget(&tree, key))) {
-		if (!(e = c_std_calloc(1, sizeof(*e)))) c_err_die(1, nil);
+		e = alloc(1, sizeof(*e));
+		if (flags & OPT_LIST) {
+			c_adt_ltpush(&elist,
+			    lnew(key, c_str_len(key, -1) + 1));
+		}
 	}
 
 	if (type & INFO_META) {
@@ -123,14 +203,15 @@ epush(char *key, int type, void *data)
 		e->ref = data;
 	} else if (type & INFO_BLOCK) {
 		c_adt_lpush(&e->data, data);
-	} else if ((type & INFO_KEYVAL) && data) {
-		if (!(data = c_adt_lnew(data, c_str_len(data, -1) + 1))) {
-			c_err_diex(1, "no memory");
+	} else if (type & INFO_KEY) {
+		while (e->data) c_adt_lfree(c_adt_lpop(&e->data), c_std_free_);
+		if (data && *(char *)(uintptr)data) {
+			e->data = entnew(data, c_str_len(data, -1) + 1, 0);
+		} else {
+			e->data = 0;
 		}
-		while (e->data) c_adt_lfree(c_adt_lpop(&e->data));
-		e->data = data;
 	}
-	e->info = (e->info & ~(INFO_BLOCK | INFO_KEYVAL)) | type;
+	e->info = (e->info & ~(INFO_BLOCK | INFO_KEY | INFO_VALUE)) | type;
 	if (c_adt_kvadd(&tree, key, e) < 0) c_err_diex(1, "no memory");
 }
 
@@ -140,7 +221,7 @@ machine(int state, char *s, usize n, usize diff)
 	static ctype_arr key;
 	static ctype_node *np;
 	static usize indent;
-	int tmp;
+	int type, tmp;
 	char *p;
 
 	if (state == -1) {
@@ -148,71 +229,66 @@ machine(int state, char *s, usize n, usize diff)
 		return 0;
 	}
 	if (n == 0) return state;
-	if (s[0] == '#' && !(opts & XFLAG)) return state;
+	if (s[0] == '#' && !(flags & XFLAG) && state <= 1) return state;
 
 	/* key | block */
 	if (state == 0) {
 		if (s[n - 1] == '{') {
-			if (isvariable(s, n - 1)) {
+			--n;
+			if (!isvariable(s + (*s == '$'), n - (*s == '$'))) {
 				c_err_diex(1, "bad formatted file");
 			}
 			c_arr_trunc(&key, 0, sizeof(uchar));
-			if (c_dyn_fmt(&key, "%.*s", n - 1, s) < 0) {
-				c_err_diex(1, "no memory");
-			}
+			dynfmt(&key, "%.*s", n, s);
 			return 1;
 		} else {
 			if ((p = c_mem_chr(s, n, ':'))) {
 				n = p - s;
-				*p++ = 0;
 				if (isvariable(s, n)) {
-					c_err_diex(1, "bad formatted file");
+					*p++ = 0;
+					epush(s, INFO_KEY | META(s), p);
+					return 0;
 				}
 			}
-			epush(s, INFO_KEYVAL | META(s), p);
+			epush(s, INFO_VALUE, nil);
 			return 0;
 		}
 	}
 	/* block */
+	type = tmp = 0;
 	if (graphspan(s, n) != n) {
-		tmp = 0;
-		/* XXX: maybe use an heuristic, when "-x" is given,
-		 * to deal with dangling '{}' */
-		for (p = s; n && *p; ++p) {
-			if (*p == '{') {
-				++tmp;
-			} else if (*p == '}') {
-				--tmp;
-			}
-		}
+		/* XXX: (-x) maybe use an heuristic for dangling '{}' */
+		for (p = s; n && *p; ++p) tmp += (*p == '{') - (*p == '}');
 	} else {
 		if (s[0] == '}') {
+			type = 1;
 			if (state > 1) {
 				--state;
-				if (opts & LFLAG) return state;
 			} else {
 				p = c_arr_data(&key);
 				epush(p, INFO_BLOCK | META(p), np);
 				np = nil;
 				return 0;
 			}
-		}
-		tmp = (s[n - 1] == '{');
-		if (opts & LFLAG) {
-			if (tmp) {
-				s[--n] = 0;
-			} else if ((p = c_str_chr(s, n, ':'))) {
-				*p = 0;
+		} else {
+			tmp = (s[n - 1] == '{');
+			if ((state <= 1) && (flags & LFLAG)) {
+				if (tmp) {
+					s[--n] = 0;
+					type = -1;
+				} else if ((p = c_str_chr(s, n, ':'))) {
+					*p = 0;
+				}
 			}
-			if (state > 1) return state + tmp;
 		}
 	}
+
 	if (!np) indent = diff;
 	diff -= indent;
-	if (c_adt_lpush(&np, c_adt_lnew(s - diff, (n + diff) + 1)) < 0) {
-		c_err_diex(1, "no memory");
-	}
-	return state + tmp;
+
+	state += tmp;
+	c_adt_lpush(&np, entnew(s - diff, (n + diff), state + type));
+	return state;
 }
 
 static void
@@ -249,93 +325,109 @@ initconf(ctype_fd fd)
 static ctype_status
 initmeta(char *s, void *data)
 {
-	struct entry *e, *re;
+	struct entry *e, *ee;
 	ctype_node *wp;
-	(void)s;
+
 	e = data;
 	if (!(e->info & INFO_META)) return 0;
-	if (!(re = c_adt_kvget(&tree, s + 1))) return 0;
-	if (!(re->data)) return 0;
-	wp = (re->data)->next;
-	do {
-		epush(wp->p, (e->info & ~INFO_META) | INFO_REF, e->ref);
-	} while ((wp = wp->next)->prev);
+
+	if (!(ee = c_adt_kvget(&tree, s + 1)) || !ee->data) return 0;
+	WL(wp, ee->data, if (ISPRINT(wp->p))
+	    epush(wp->p, (e->info & ~INFO_META) | INFO_REF, e->ref));
 	return 0;
 }
 
 /* expansion routines */
 static ctype_status
-expand(struct entry *e)
+expand(char *s, struct entry *e)
 {
+	struct entry *ee;
 	ctype_node *np, *wp;
+
 	if (e->info & INFO_DEFFERING) {
 		return -1;
 	} else if (e->info & INFO_DEFFERED) {
 		return 0;
-	} else if ((e->info & INFO_REF) && !e->data) {
-		e->info |= INFO_DEFFERED;
-		return 0;
 	}
-	e->info |= INFO_DEFFERING;
-	wp = (e->data)->next;
-	do {
-		if (!(np = deference(wp->p))) continue;
-		if (!wp->prev) {
-			/* head */
-			if (wp->next == wp) {
+
+	if (e->info & INFO_REF) {
+		if ((ee = c_adt_kvget(&tree, e->ref))) expand(e->ref, ee);
+		e->info |= INFO_DEFFERED;
+	}
+
+	if (e->data) {
+		e->info |= INFO_DEFFERING;
+		wp = (e->data)->next;
+		do {
+			if (!(np = deference(wp->p, ISTAG(wp->p)))) continue;
+			if (!wp->prev) {
+				/* head */
+				if (wp->next == wp) {
+					e->data = np;
+				} else {
+					wp->next->prev = np;
+					(e->data)->next = np->next;
+					np->next = wp->next;
+				}
+			} else if (wp == e->data) {
+				/* tail */
+				(wp->prev)->next = np->next;
+				(np->next)->prev = wp->prev;
+				np->next = wp->next;
 				e->data = np;
 			} else {
-				wp->next->prev = np;
-				(e->data)->next = np->next;
+				/* mid */
+				(wp->prev)->next = np->next;
+				(wp->next)->prev = np;
+				(np->next)->prev = wp->prev;
 				np->next = wp->next;
 			}
-		} else if (wp == e->data) {
-			/* tail */
-			(wp->prev)->next = np->next;
-			(np->next)->prev = wp->prev;
-			np->next = wp->next;
-			e->data = np;
-		} else {
-			/* mid */
-			(wp->prev)->next = np->next;
-			(wp->next)->prev = np;
-			(np->next)->prev = wp->prev;
-			np->next = wp->next;
-		}
-		c_std_free(wp->p);
-		c_std_free(wp);
-		wp = np;
-	} while ((wp = wp->next)->prev);
-	e->info = (e->info & ~INFO_DEFFERING) | INFO_DEFFERED;
+			entfree(wp->p);
+			c_std_free(wp);
+			wp = np;
+		} while ((wp = wp->next)->prev);
+		e->info = (e->info & ~INFO_DEFFERING) | INFO_DEFFERED;
+	}
+
+	if (flags & OPT_LIST) edump(s, e);
 	return 0;
 }
 
 static void
-combine(ctype_node **list, struct ref *refs, usize n)
+combine(ctype_node **list, struct ref *refs, usize n, int print)
 {
 	ctype_arr arr;
-	usize *idxs;
+	usize *indexes;
 	size i;
+	char *s;
 
-	if (!(idxs = c_std_calloc(n, sizeof(*idxs)))) c_err_die(1, nil);
+	if (!n) return;
+	indexes = alloc(n, sizeof(*indexes));
 
 	for (;;) {
 		c_mem_set(&arr, sizeof(arr), 0);
+		/* print tag */
+		dynfmt(&arr, "%c", print);
+		/* list */
 		for (i = 0; (usize)i < n; ++i) {
-			if (c_dyn_fmt(&arr, "%s", refs[i].args[idxs[i]]) < 0) {
-				c_err_die(1, nil);
+			if (*(s = refs[i].args[indexes[i]])) {
+				dynfmt(&arr, "%s", s);
+				if (!ISTAG(s)) {
+					s = c_arr_get(&arr, 0, sizeof(uchar));
+					*s = 0;
+					break;
+				}
 			}
 		}
 		c_dyn_shrink(&arr, sizeof(uchar));
-		if (c_adt_lpush(list, c_adt_lnew(c_arr_data(&arr), 0)) < 0) {
-			c_err_die(1, nil);
-		}
+		c_adt_lpush(list,
+		    lnew((uchar *)(uintptr)c_arr_data(&arr) + 1, 0));
 		for (i = n - 1; i >= 0; --i) {
-			++idxs[i];
-			if (idxs[i] < refs[i].n) break;
-			idxs[i] = 0;
+			++indexes[i];
+			if (indexes[i] < refs[i].n) break;
+			indexes[i] = 0;
 			if (!i) {
-				c_std_free(idxs);
+				c_std_free(indexes);
 				return;
 			}
 		}
@@ -343,94 +435,87 @@ combine(ctype_node **list, struct ref *refs, usize n)
 }
 
 static void
-refpush(ctype_arr *ap, char *s, usize n)
+refpush(ctype_arr *ap, char *s)
 {
 	struct ref r;
-	if (!n) return;
-	r.args = c_std_vtoptr(c_str_dup(s, n));
+	r.args = c_std_ptrlist(s);
 	r.n = 1;
 	r.free = 1;
-	if (c_dyn_cat(ap, &r, 1, sizeof(r)) < 0) c_err_diex(1, "no memory");
+	dyncat(ap, &r, 1, sizeof(r));
+}
+
+static void
+refepush(ctype_arr *ap, struct entry *e)
+{
+	struct ref r;
+	ctype_node *wp;
+	usize i;
+	/* count */
+	r.n = 0;
+	WL(wp, e->data, r.n++);
+	r.args = alloc(r.n + 1, sizeof(char *));
+	/* insert */
+	i = 0;
+	WL(wp, e->data, r.args[i++] = wp->p);
+	r.free = 0;
+	dyncat(ap, &r, 1, sizeof(r));
 }
 
 static ctype_status
-reftree(ctype_arr *ap, char *s, usize n, int split)
+refbuild(ctype_arr *ap, char *s, usize n, int split)
 {
 	struct entry *e;
-	struct ref r;
 	ctype_arr arr;
 	ctype_node *wp;
-	usize i;
 	int tmp;
 
 	tmp = s[n];
 	s[n] = 0;
 	e = c_adt_kvget(&tree, s);
+	if (!e || expand(s, e) < 0) {
+		s[n] = tmp;
+		return -1;
+	}
 	s[n] = tmp;
-	if (!e) return -1;
-	expand(e);
+	if (!e->data) return 0;
 
 	if (!split) {
 		c_mem_set(&arr, sizeof(arr), 0);
+		/* print tag */
+		dynfmt(&arr, "%c", 1);
 		/* flat list */
 		tmp = 1;
-		wp = (e->data)->next;
-		do {
-			if (c_dyn_fmt(&arr,
-			    "%s%s", tmp ? (--tmp, "") : " ", wp->p) < 0) {
-				c_err_diex(1, "no memory");
-			}
-		} while ((wp = wp->next)->prev);
+		WL(wp, e->data, if (ISTAG(wp->p) && *(char *)(uintptr)wp->p)
+		    dynfmt(&arr, "%s%s", tmp ? (--tmp, "") : " ", wp->p));
 		c_dyn_shrink(&arr, sizeof(uchar));
 		/* insert */
-		r.args = c_std_vtoptr(c_arr_data(&arr));
-		r.n = 1;
-		r.free = 1;
-		if (c_dyn_cat(ap, &r, 1, sizeof(r)) < 0) {
-			c_err_diex(1, "no memory");
-		}
+		refpush(ap, (char *)(uintptr)c_arr_data(&arr) + 1);
 		return 0;
 	}
-
-	/* count */
-	r.n = 0;
-	wp = (e->data)->next;
-	do {
-		++r.n;
-	} while ((wp = wp->next)->prev);
-	if (!(r.args = c_std_alloc(r.n + 1, sizeof(char *)))) {
-		c_err_diex(1, "no memory");
-	}
-	/* insert */
-	i = 0;
-	wp = (e->data)->next;
-	do {
-		r.args[i++] = wp->p;
-	} while ((wp = wp->next)->prev);
-	r.args[i] = nil;
-	r.free = 0;
-	if (c_dyn_cat(ap, &r, 1, sizeof(r)) < 0) c_err_diex(1, "no memory");
+	refepush(ap, e);
 	return 0;
 }
 
 static void
-freeref(struct ref *r, usize n)
+refclean(struct ref *r, usize n)
 {
 	usize i;
 	for (i = 0; i < n; ++i) {
-		if (r[i].free) c_std_free(r[i].args[0]);
+		if (r[i].free) entfree(r[i].args[0]);
 		c_std_free(r[i].args);
 	}
 }
 
 static ctype_node *
-deference(char *line)
+deference(char *line, int print)
 {
 	ctype_arr set;
 	ctype_node *list;
 	usize diff;
 	int split;
 	char *end, *p, *s;
+
+	if (flags & XXFLAG) return nil;
 
 	s = line;
 	end = c_mem_chr(s, -1, 0);
@@ -445,7 +530,7 @@ deference(char *line)
 		case '$':
 			c_str_cpy(s, end - s, s + 1);
 			++s;
-			break;
+			continue;
 		case ':':
 			if (p[1] != '{') continue;
 			++p;
@@ -467,8 +552,9 @@ deference(char *line)
 			diff = 1;
 		}
 		if (!*s) break;
-		refpush(&set, line, s - line);
-		if (reftree(&set, s + diff, p - (s + diff), split) < 0) {
+
+		if (s - line) refpush(&set, entdup(line, s - line));
+		if (refbuild(&set, s + diff, p - (s + diff), split) < 0) {
 			c_arr_trunc(&set,
 			    c_arr_len(&set, sizeof(struct ref)) - 1,
 			    sizeof(struct ref));
@@ -477,82 +563,86 @@ deference(char *line)
 		line = p + (diff > 1);
 	}
 	/* remaining raw string */
-	if (line < end && *line) refpush(&set, line, end - line);
+	if (line < end && *line) refpush(&set, entdup(line, end - line));
 	/* to list */
 	list = nil;
-	combine(&list, c_arr_data(&set), c_arr_len(&set, sizeof(struct ref)));
+	combine(&list,
+	    c_arr_data(&set), c_arr_len(&set, sizeof(struct ref)), print);
 	/* cleanup */
-	freeref(c_arr_data(&set), c_arr_len(&set, sizeof(struct ref)));
+	refclean(c_arr_data(&set), c_arr_len(&set, sizeof(struct ref)));
 	c_dyn_free(&set);
 	return list;
 }
 
 /* tree interaction routines */
-static ctype_status
-eexpand(char *s, void *data)
-{
-	struct entry *e;
-	(void)s;
-	e = data;
-	if (e->data) expand(data);
-	return 0;
-}
-
-static ctype_status
-edump(char *s, void *data)
-{
-	ctype_node *np;
-	struct entry *e;
-	e = data;
-	if (checkprint(e)) return 0;
-	if (!(np = deference(s))) {
-		c_ioq_fmt(ioq1, "%s\n", s);
-		return 0;
-	}
-	np = np->next;
-	do {
-		c_ioq_fmt(ioq1, "%s\n", np->p);
-	} while ((np = np->next)->prev);
-	while (np) c_adt_lfree(c_adt_lpop(&np));
-	return 0;
-}
-
 static void
 efree(void *p)
 {
 	struct entry *e;
 	e = p;
 	if (e->info & INFO_META) c_std_free(e->ref);
-	while (e->data) c_adt_lfree(c_adt_lpop(&e->data));
+	while (e->data) c_adt_lfree(c_adt_lpop(&e->data), entfree);
 	c_std_free(e);
 }
 
 static void
 eprint(struct entry *e)
 {
-	struct entry *re;
+	struct entry *ee;
 	ctype_node *wp;
-	expand(e);
-	if (checkprint(e)) return;
+
+	if (blockprint(e)) return;
+	expand(nil, e);
+
 	if (e->info & INFO_REF) {
-		if (!(re = c_adt_kvget(&tree, e->ref))) return;
-		wp = (re->data)->next;
-		do {
-			c_ioq_fmt(ioq1, "%s\n", wp->p);
-		} while ((wp = wp->next)->prev);
-		if (!e->data) return;
+		if (!(ee = c_adt_kvget(&tree, e->ref))) return;
+		WL(wp, ee->data, c_ioq_fmt(ioq1, "%s\n", wp->p));
 	}
-	wp = (e->data)->next;
-	do {
-		c_ioq_fmt(ioq1, "%s\n", wp->p);
-	} while ((wp = wp->next)->prev);
+	if (!e->data) return;
+	WL(wp, e->data, if (ISPRINT(wp->p)) c_ioq_fmt(ioq1, "%s\n", wp->p));
+}
+
+static void
+_edump(char *s, struct entry *e)
+{
+	if ((flags & XFLAG) && (e->info & INFO_REF)) return;
+	if ((flags & LFLAG) || (e->info & INFO_VALUE)) {
+		if (!blockprint(e)) c_ioq_fmt(ioq1, "%s\n", s);
+		return;
+	}
+	if (e->info & INFO_KEY) {
+		c_ioq_fmt(ioq1, "%s:", s);
+		eprint(e);
+		c_ioq_put(ioq1, "\n");
+	} else {
+		c_ioq_fmt(ioq1, "%s{\n", s);
+		eprint(e);
+		c_ioq_put(ioq1, "}\n");
+	}
+}
+
+static void
+edump(char *s, void *data)
+{
+	ctype_node *n;
+	struct entry *e;
+
+	e = data;
+	if (blockprint(e)) return;
+
+	if (!(n = deference(s, 1))) {
+		_edump(s, e);
+		return;
+	}
+	WL(n, n, if (ISPRINT(n->p)) _edump(n->p, e));
+	while (n) c_adt_lfree(c_adt_lpop(&n), c_std_free_);
 }
 
 static void
 usage(void)
 {
-	c_ioq_fmt(ioq1,
-	    "usage: %s [-akltvx] key [file]\n",
+	c_ioq_fmt(ioq2,
+	    "usage: %s [-aklqtvx] key [file]\n",
 	    c_std_getprogname());
 	c_std_exit(1);
 }
@@ -562,32 +652,35 @@ main(int argc, char **argv)
 {
 	struct entry *e;
 	ctype_fd fd;
-	int mode;
+	uint mode;
 
 	c_std_setprogname(argv[0]);
 	--argc, ++argv;
 
-	fd = 0;
 	mode = MOD_KEYVAL;
-	while (c_std_getopt(argmain, argc, argv, "akltvx")) {
+
+	while (c_std_getopt(argmain, argc, argv, "aklqtvx")) {
 		switch (argmain->opt) {
 		case 'a':
 			mode = MOD_ALL;
 			break;
 		case 'k':
-			opts = (opts & ~VFLAG) | KFLAG;
+			flags = (flags & ~VFLAG) | KFLAG;
 			break;
 		case 'l':
-			opts |= LFLAG;
+			flags |= LFLAG;
+			break;
+		case 'q':
+			flags |= QFLAG;
 			break;
 		case 't':
 			mode = MOD_BLOCK;
 			break;
 		case 'v':
-			opts = (opts & ~KFLAG) | VFLAG;
+			flags = (flags & ~KFLAG) | VFLAG;
 			break;
 		case 'x':
-			opts = (opts & ~(KFLAG | LFLAG | VFLAG)) | XFLAG;
+			flags |= (flags & XFLAG) ? XXFLAG : XFLAG;
 			break;
 		default:
 			usage();
@@ -611,32 +704,53 @@ main(int argc, char **argv)
 	default:
 		usage();
 	}
-	initconf(fd);
-	c_adt_kvtraverse(&tree, initmeta);
-	c_adt_kvtraverse(&tree, eexpand);
 
-	if (C_STD_ISDASH(*argv) && (mode == MOD_BLOCK || mode == MOD_ALL)) {
+	if (C_STD_ISDASH(*argv) && (mode & (MOD_ALL | MOD_BLOCK))) {
+		flags |= OPT_LIST;
 		mode = MOD_SELF;
 	}
+
+	initconf(fd);
+	c_adt_kvtraverse(&tree, initmeta);
+
+	if (mode & (MOD_KEYVAL | MOD_BLOCK | MOD_ALL)) {
+		if (!(e = c_adt_kvget(&tree, *argv))) return 1;
+	}
+
+	if (flags & QFLAG) {
+		if (blockprint(e)) return 1;
+		return 0;
+	}
+
 	switch (mode) {
 	case MOD_KEYVAL:
-		if (!(e = c_adt_kvget(&tree, *argv))) return 1;
-		if (!(e->info & INFO_KEYVAL)) return 1;
-		eprint(e);
+		if (e->info & INFO_VALUE) {
+			if (flags & KFLAG) return 1;
+			c_ioq_fmt(ioq1, "%s\n", *argv);
+		} else {
+			if (flags & VFLAG || !(e->info & INFO_KEY)) return 1;
+			eprint(e);
+		}
 		break;
 	case MOD_BLOCK:
-		if (!(e = c_adt_kvget(&tree, *argv))) return 1;
 		if (!(e->info & INFO_BLOCK)) return 1;
 		eprint(e);
 		break;
 	case MOD_ALL:
-		if (!(e = c_adt_kvget(&tree, *argv))) return 1;
-		eprint(e);
+		if (e->info & INFO_VALUE) {
+			if (flags & KFLAG) return 1;
+			c_ioq_fmt(ioq1, "%s\n", *argv);
+		} else {
+			if (blockprint(e)) return 1;
+			eprint(e);
+		}
 		break;
 	case MOD_SELF:
-		c_adt_kvtraverse(&tree, edump);
+		while (elist) {
+			expand(elist->p, c_adt_kvget(&tree, elist->p));
+			c_adt_lfree(c_adt_lpop(&elist), c_std_free_);
+		}
 	}
-
 	c_adt_kvfree(&tree, efree);
 	c_ioq_flush(ioq1);
 	return 0;
