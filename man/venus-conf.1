@@ -1,4 +1,4 @@
-.Dd $Mdocdate: November 04 2024 $
+.Dd $Mdocdate: February 20 2025 $
 .Dt venus-conf 1
 .Os
 .Sh NAME
@@ -7,7 +7,7 @@
 .Sh SYNOPSIS
 .Nm
 .Op Fl a | t
-.Op Fl lkv | x
+.Op Fl klqvx
 .Ar key
 .Op Ar file
 .Sh DESCRIPTION
@@ -25,7 +25,8 @@ If
 .Ar key
 is a single dash,
 .Nm
-treats the content itself a multi-value key.
+treats the content itself as a block. In this case, the order follows
+the graph order, then the declaration order.
 .Pp
 If
 .Ar file
@@ -34,25 +35,28 @@ is a single dash
 or absent,
 .Nm
 reads from the standard input.
-.Pp
-By default, if no flag for key type is specified,
-.Nm
-searches for single-key keys.
 .Sh OPTIONS
 .Bl -tag -width Ds
 .It Fl a
 Search for entries of any type.
 .It Fl k
-Display only keys for multi-value entries.
+Filter for blocks and keys.
 .It Fl l
-Exclude keys associated value from multi-value entries.
+Print blocks and keys as values
+.Pq without its associated entries .
 .It Fl t
-Search for multi-value entries only.
+Search for blocks only.
 .It Fl v
 Display only values for multi-value entries.
 .It Fl x
-Treat values as exact/literal.
+Ignore commentaries. If specified twice ignore reference expansions.
 .El
+.Pp
+If the options
+.Fl a
+and
+.Fl t
+are not specified, the default is to search only for key and value entries.
 .Sh EXIT STATUS
 .Ex -std
 .Sh SEE ALSO

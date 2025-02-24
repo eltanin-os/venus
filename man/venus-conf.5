@@ -1,58 +1,139 @@
-.Dd $Mdocdate: September 18 2024 $
+.Dd $Mdocdate: February 24 2025 $
 .Dt VENUS-CONF 5
 .Os
 .Sh NAME
 .Nm venus-conf
 .Nd venus config file
 .Sh DESCRIPTION
-The venus config files are just flat files with two kind of keys
-single-value and multi-value.
-.Pp
-Single value variables are declared as:
-.Dl variable:value
-.Pp
-Multiple value variables are declared as:
-.Bd -literal -offset indent -compact
-variable{
-  value1
-  value2
-  value3
+The venus configuration files are just flat files with blocks, keys and values.
+.Ss VALUES
+The values are declares as follow:
+.Bd -literal -offset indent
+value1
+value2
+value3
+.Ed
+.Ss KEYS
+The keys are declared as follow:
+.Bd -literal -offset indent
+key:value
+.Ed
+Redeclaring a key replaces its previous value:
+.Bd -literal -offset indent
+key:value
+key:new-value
+.Ed
+.Ss BLOCK DECLARATIONS
+The blocks are declared as follow:
+.Bd -literal -offset indent
+block-1{
+	value1
+	value2
+	value3
 }
 .Ed
 .Pp
-It can be declared in a recursive manner:
-.Bd -literal -offset indent -compact
+Block redeclaration merges entries with previous declarations:
+.Bd -literal -offset indent
+block-1{
+	value1
+	value2
+	value3
+}
+block-1{
+	# Previous values are retained
+	value4
+	value5
+	value6
+}
+.Ed
+.Pp
+A key declaration empties a block:
+.Bd -literal -offset indent
+.Ed
+block-1:
+# block is now empty
+.Pp
+Subsequent block declarations merge with the key value:
+.Bd -literal -offset indent
+block-1{
+	new-entries
+}
+.Ed
+.Pp
+Nested blocks (recursion) are supported:
+.Bd -literal -offset indent
 users{
-  user1{
-    name:user1
-    home:/home/user1
-    id:333
-  }
-  user2{
-    name:user2
-    home:/home/user2
-    id:666
-  }
+	user1{
+		name:user1
+		home:/home/user1
+		id:333
+	}
+	user2{
+		name:user2
+		home:/home/user2
+		id:666
+	}
+}
+.Ed
+.Ss REFERENCES AND DEREFERENCES
+Values can be referenced using three syntaxes:
+.Bl -tag -width XXXXXXXXXXXXX -compact
+.It $reference
+Allows alphanumeric characters and underscores.
+.It ${reference}
+Allows any UTF-8 graphical characters.
+.It $:{reference}
+Allows any UTF-8 graphical characters
+.El
+.Pp
+References are evaluated lazily:
+.Bd -literal -offset indent
+key-1:a-random-value
+key-2:hallo
+key-2:hello
+key-3:$:{key-1}
+key-1:${key-2} world
+.Ed
+.Pp
+In this example,
+.Dq key-3
+resolves to "hello world".
+.Pp
+Cyclic references are ignored.
+.Ss BLOCK EXPANSION
+Blocks can be expanded and concatenated:
+.Bd -literal -offset indent
+block-1{
+	a
+	b
+	c
+}
+block-2{
+	# Adds ".c" to each entry in block-1
+	${block-1}.c
+	# Flat expansion
+	entries-list:$:{block-1}
 }
 .Ed
 .Pp
-The keys can be referred in any order in the following way:
-.Bd -literal -offset indent -compact
-key1:hello
-multi-key-0{
-  value1
-  value2
-  $key3
+Inner blocks are ignored.
+.Ss META BLOCKS
+Meta blocks allow values to become blocks themselves:
+.Bd -literal -offset indent
+block-0{
+	value1
+	value2
+	value3
 }
-multi-key-1{
-  # expand for each key
-  ${multi-key-0}.c
-  # flat expansion
-  $:{multi-key-0}
+# Each value in block-0 becomes a block
+$block-0{
+	data
 }
-key3:$key1
 .Ed
-.Pp
-The variables must be declared one per line.
+.Ss EVALUATION ORDER
+While the configuration uses lazy evaluation
+.Pq allowing out-of-order references ,
+the file is still processed from top to bottom.
 .Sh SEE ALSO
 .Xr venus-conf 1
